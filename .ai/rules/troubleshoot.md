@@ -1,0 +1,42 @@
+---
+paths:
+  - 'resources/js/pages/dynamic/assets/troubleshoot/**'
+  - 'app/Http/Controllers/TroubleshootController.php'
+  - 'app/Http/Requests/TroubleshootRequest.php'
+  - 'app/Models/Troubleshoot.php'
+  - 'database/migrations/*_create_troubleshoots_table.php'
+  - 'tests/Feature/TroubleshootTest.php'
+---
+
+# Troubleshoot
+
+## Tickets speak Solved/Unresolved; the DB keeps Normal/Masih Bermasalah
+Every ticket-facing surface displays the labels from `Troubleshoot::RESULT_LABELS` (`Normal` → **Solved** green, `Masih Bermasalah` → **Unresolved** rose): the Hasil column on the Troubleshoot page, the result Select in the Create/Edit dialogs (labels only — the submitted `result` value is still the stored string), the Riwayat Gangguan tickets table, and all three CSV exports (`Troubleshoot::resultLabel()` on the backend, `ticketResultLabel()` mirrored in both page components). The maintenance's own Hasil column/export keeps Normal/Bermasalah — that is a maintenance result, not a ticket status. Because the UI never shows the raw strings, `TroubleshootController::resultSearchTerm()` translates the labels back (`str_ireplace`) so typing `solved`/`unresolved` matches rows in the Hasil column and in "Semua kolom"; raw terms like `Masih` still work. The translation is a **whole-word, case-insensitive regex** (`preg_replace_callback` + `\b`) — a plain `str_ireplace` corrupts `unresolved` because it contains the substring `solved` (`unre` + `Normal`). Do NOT rename the stored strings — validation (`Troubleshoot::RESULTS`), the maintenance-side ticket sync, and existing rows all key off them.
+
+## Two doors into the same table
+Menu id 34 `/assets/troubleshoot` (parent 21, borrowed permission `view/manage asset management` like every Asset Management child — no new permission name) lists `troubleshoots`, the trouble-ticket table. A row is either **born from a Bermasalah maintenance** (`maintenance_id` set — created by `MaintenanceController` in its transaction, never by this controller, `troubleshoot_date` inherited from the maintenance's `end_date ?? maintenance_date`) or **entered manually here** (`maintenance_id` NULL). `TroubleshootController::store` always writes `maintenance_id => null` and `update` never touches the link — that field only ever changes through maintenance lifecycle events. Every ticket carries **work dates**: nullable `started_date` (when the follow-up began) and `closed_date` (only ever set while Solved).
+
+A ticket is the asset's **trouble history and is never deleted automatically** — only an explicit Delete here removes one. **This page is the ONLY place a ticket closes**: picking Solved demands `started_date` + `closed_date` (both required by `TroubleshootRequest::after()` when `result === 'Normal'`, and `closed_date >= started_date`) and — when the ticket came from a maintenance record — flips that maintenance to `result = Normal` + `status = Done` in the same DB transaction (one-way sync Troubleshoot → Maintenance; the maintenance page can no longer resolve anything, see `.ai/rules/maintenance.md`). Switching back to Unresolved clears `closed_date` (started stays); a maintenance relapse (Normal → Bermasalah) re-opens the row the same way.
+
+## Mutations broadcast on the shared `maintenance` channel
+Every store/update/destroy here dispatches `MaintenanceChanged` (public channel `maintenance`, `.maintenance.changed` — dispatched by BOTH controllers so either page refreshes the other in real time via `useEchoPublic`). Keep dispatching on every mutation; a new mutation type without the dispatch silently breaks the other page's live view. See `.ai/rules/maintenance.md` for the convention note (no polling).
+
+## Schema decisions that look odd but are deliberate
+- Column is `troubleshoot_date` (not `date`) — mirrors `maintenance_date`, avoids the SQL type word as a column name.
+- `started_date`/`closed_date` are nullable dates on purpose: a fresh ticket has not been worked on yet, and only a Solved ticket ever carries a close date (the controller nulls it when the result flips back to Unresolved).
+- `maintenance_id` FK is `nullOnDelete` (a maintenance delete must NOT take its ticket down), `asset_id` FK is `restrictOnDelete` — hence `AssetController::destroy` guards the asset with a flash toast instead of letting the FK 500.
+- `result` in `Troubleshoot::RESULTS = ['Normal','Masih Bermasalah']` — note these strings differ from `Maintenance::RESULTS` (`Normal`/`Bermasalah`); do not unify them, the UI and validation both key off the exact words.
+
+## Same controller/Request conventions as Maintenance
+`?? null` before every `?->store()` in `validated()` data (absent file keys are missing, see `.ai/rules/maintenance.md`), files on the `public` disk in `troubleshoots/` (photo `image|max:4096`, document `max:10240`), destroy removes the row's own files, search columns whitelist `all | asset_name | result` (asset name through `whereHas`, unknown → `all`), `canManage` gates the create/edit/delete buttons only. Delete confirmation on the maintenance side states the ticket survives — keep that copy in sync if the lifecycle rule changes.
+
+## Date filter, dd/mm/yyyy rendering, and CSV export (shared with Maintenance)
+Dates are not a text-search column: the `DateFilter` popover (copied from Activity Log) sends `date=YYYY-MM-DD`, `filteredQuery()` applies `whereDate('troubleshoot_date', ...)`, and the `date` param rides along in EVERY param-sending control (search debounce, column select, per-page, history open/close, export link). Tanggal/Mulai/Selesai cells render `formatDate()` → `dd/mm/yyyy` (en-GB with `${value}T00:00:00`), a null work date shows `-`. `GET assets/troubleshoot/export` (name `assets.troubleshoot.export`, group `permission:manage-asset-management`) streams `troubleshoots-Y-m-d.csv` via `export()` reusing `filteredQuery()`; header stays in sync with `tableHeaders` minus `Aksi` (`Tanggal,Mulai,Selesai` before Hasil); the green Export button is `canManage`-only.
+
+## Riwayat gangguan: `?history_asset={id}` prop, not a route
+`TroubleshootController::index` always ships a `history` prop (`null` unless the `history_asset` query param resolves an existing `Asset`). When set it is `{ asset, tickets, maintenances }`: every ticket of that asset (`with('maintenance:id,maintenance_date')`, newest first, the maintenance gives the Asal column `Maintenance {dd/mm/yyyy}` vs `Manual`) plus every maintenance record of that asset. The page's History icon (one per row, shown to ALL users — it is read-only) does `router.get(listUrl, { ...filters, history_asset }, { only: ['history'] })`; the dialog is `open` while `history !== null` and Close re-issues the same GET without the param. Because state comes from the URL, a browser reload with the dialog open re-renders it correctly. Do not turn this into a separate route — it would need its own wayfinder/page component and would drop the list on reload.
+
+History is NOT restricted to assets that already have tickets: the toolbar **"Riwayat"** button (visible to every user, outside the `canManage` guard) opens `HistoryPickerDialog` — a Select over the existing `assetOptions` — and picking any asset fires the same `?history_asset=` request; an asset with no tickets/maintenances just shows the empty-state sections (`historyPayload` returns empty collections, not null). The Echo callback reloads `['troubleshoots', 'history']` so an open dialog stays live. Do not hide the toolbar button behind `canManage`.
+
+## Export riwayat: `assets.troubleshoot.history.export`, manage-only
+`GET assets/troubleshoot/history/export?history_asset={id}` → `TroubleshootController::exportHistory` sits in the `permission:manage-asset-management` group (confirmed with the user: history export is manage-only, same as every other export), 404 when the asset id is unknown. It reuses `historyPayload()` and streams ONE two-section CSV (`riwayat-gangguan-{Str::slug(name)}-{Y-m-d}.csv`): section title `Riwayat Gangguan - {name}` + ticket headers `No,Tanggal,Mulai,Selesai,Hasil,Asal,Foto Eviden,Dokumen` (Asal = `Maintenance {Y-m-d}` or `Manual`), blank row, `Riwayat Maintenance` + `No,Tanggal Mulai,Tanggal Beres,Status,Hasil` (`historyPayload` ships `end_date` in the maintenance select, and both dialog tables show the same extra date columns). Dates stay raw `Y-m-d` (export convention). The **"Export CSV"** button lives in the history dialog footer next to Tutup, rendered only when `canManage` (the dialog receives `canManage` as a prop).
