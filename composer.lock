@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "abf8262da6dc3af26bdd76fde5b062cf",
+    "content-hash": "ac70d2e52e04374381b0d31c92631af3",
     "packages": [
         {
             "name": "bacon/bacon-qr-code",
@@ -9829,16 +9829,16 @@
         },
         {
             "name": "laravel/sail",
-            "version": "v1.66.0",
+            "version": "v1.69.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/laravel/sail.git",
-                "reference": "ebf286104306c50c8fd060cbc57de35b9dffa779"
+                "reference": "3587ac9d68e8f2eaf36bd9fb003a4555861dca9d"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/laravel/sail/zipball/ebf286104306c50c8fd060cbc57de35b9dffa779",
-                "reference": "ebf286104306c50c8fd060cbc57de35b9dffa779",
+                "url": "https://api.github.com/repos/laravel/sail/zipball/3587ac9d68e8f2eaf36bd9fb003a4555861dca9d",
+                "reference": "3587ac9d68e8f2eaf36bd9fb003a4555861dca9d",
                 "shasum": ""
             },
             "require": {
@@ -9888,7 +9888,7 @@
                 "issues": "https://github.com/laravel/sail/issues",
                 "source": "https://github.com/laravel/sail"
             },
-            "time": "2026-08-10T13:09:27+00:00"
+            "time": "2026-10-08T20:06:52+00:00"
         },
         {
             "name": "mockery/mockery",

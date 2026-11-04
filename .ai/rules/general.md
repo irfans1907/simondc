@@ -6,11 +6,14 @@ paths:
 
 # General
 
-## Dev via Apache simondc.test, bukan artisan serve
-Dev sekarang pakai Apache Laragon (http://simondc.test), BUKAN php artisan serve. APP_URL=http://simondc.test. Jalankan secara terpisah: `npm run dev` (Vite, port 5173) + `php artisan reverb:start` (port 8080) + `php artisan queue:work` (dibutuhkan karena event broadcast files.changed diproses via queue database). Jangan gunakan `composer run dev` (itu memakai artisan serve + bisa dobel).
+## Dev via Docker Compose (Laravel Sail), bukan Apache/artisan serve host
+Seluruh stack jalan di Docker Compose: `laravel.test` (app :80), `vite` (:5173), `reverb` (:8081 -> 8080), `queue`, `phpmyadmin` (:8080), `mysql` (:3306). Cukup jalankan `./vendor/bin/sail up -d` sekali; serve, Vite, Reverb, dan queue otomatis hidup sebagai service. Jangan pakai `composer run dev` atau `php artisan serve` di host. Akses app di http://localhost dan phpMyAdmin di http://localhost:8080. Hentikan dengan `./vendor/bin/sail down` (JANGAN `-v` kecuali memang ingin menghapus data MySQL).
 
-## Perintah yang harus jalan saat buka project (dev)
-Jalankan 3 proses terpisah: 1) `npm run dev` (Vite :5173), 2) `php artisan reverb:start` (Reverb :8080), 3) `php artisan queue:work --tries=1 --timeout=0` (proses job broadcast FilesChanged). Apache Laragon (http://simondc.test) serve app; JANGAN pakai `composer run dev` (memakai artisan serve). Tanpa queue:work, realtime refresh tidak jalan dan harus refresh manual.
+## Env Docker + Reverb
+`.env` menyimpan `WWWUSER=1000`/`WWWGROUP=1000` (menghilangkan warning compose). Server-side Reverb memakai `REVERB_HOST=reverb` + `REVERB_PORT=8080`; browser memakai `VITE_REVERB_HOST=localhost` + `VITE_REVERB_PORT=8081` (host port Reverb, karena 8080 dipakai phpMyAdmin). `SESSION_DRIVER=file` dan `CACHE_STORE=file` agar dev tidak bergantung pada tabel session/cache di DB.
+
+## Perintah harian lewat Sail
+`./vendor/bin/sail artisan migrate`, `./vendor/bin/sail artisan wayfinder:generate --with-form`, `./vendor/bin/sail npm run build`, `./vendor/bin/sail composer install`, `./vendor/bin/sail logs -f`. Service `queue` wajib hidup: tanpa itu event broadcast `files.changed` tidak diproses dan realtime refresh tidak jalan.
 
 ## Wayfinder generate must use --with-form
 Always run `php artisan wayfinder:generate --with-form` to include .form() method helpers. Without this flag, calls like `RouteController.store.form()` or `FileController.destroy.form(id)` will fail at runtime with "is not a function".
