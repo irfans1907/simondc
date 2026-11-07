@@ -11,6 +11,7 @@ use App\Http\Controllers\FileController;
 use App\Http\Controllers\FileShareController;
 use App\Http\Controllers\MaintenanceController;
 use App\Http\Controllers\MenuController;
+use App\Http\Controllers\MonthlyCheckController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\PanelPowerController;
@@ -253,17 +254,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('checklist.overview');
         Route::get('checklist/dailycheck', [ChecklistController::class, 'dailycheck'])
             ->name('checklist.dailycheck');
-        Route::get('checklist/monthlycheck', [ChecklistController::class, 'monthlycheck'])
+        Route::get('checklist/monthlycheck', [MonthlyCheckController::class, 'index'])
             ->name('checklist.monthlycheck');
     });
 
     Route::middleware('permission:manage-checklist')->group(function () {
-        Route::get('checklist/export', [ChecklistController::class, 'export'])
-            ->name('checklist.export');
         Route::post('checklist/entries', [ChecklistController::class, 'storeEntries'])
             ->name('checklist.entries.store');
         Route::delete('checklist/entries/{entry}', [ChecklistController::class, 'destroyEntry'])
             ->name('checklist.entries.destroy');
+
+        Route::post('checklist/monthlycheck/load', [MonthlyCheckController::class, 'storeLoad'])
+            ->name('checklist.monthlycheck.load');
+        Route::post('checklist/monthlycheck/panel', [MonthlyCheckController::class, 'storePanel'])
+            ->name('checklist.monthlycheck.panel');
+        Route::get('checklist/monthlycheck/export', [MonthlyCheckController::class, 'export'])
+            ->name('checklist.monthlycheck.export');
     });
 
     // The monitoring module root redirects to its overview child page; every
