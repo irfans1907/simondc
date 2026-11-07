@@ -4,6 +4,7 @@ paths:
   - 'app/Http/Controllers/**'
   - app/Http/Controllers/PageController.php
   - app/Http/Controllers/MenuController.php
+  - app/Http/Controllers/ChecklistController.php
 ---
 
 # Controllers
@@ -39,3 +40,6 @@ Base Controller::childMenuProps(?Menu $parent, ?Menu $child) returns the shared 
 
 ## generatePageFile emits the shared breadcrumb layout contract
 MenuController::generatePageFile picks a template by SEGMENT COUNT (route semantics): 2+ segments = child template with the full chain `showChildCrumbs(props) ?? menuBreadcrumbs(props.menus, '<menu url via var_export>') ?? [{ title: props.menu.name, href: props.menu.url }]` (imports menuBreadcrumbs/showChildCrumbs + type MenuRow, layout props menus?/menu{name,url}/activeChild?); single segment = parent template with single crumb `href: props.menu.url` (never '#' — every breadcrumb crumb must be a clickable link). Placeholder __MENU_URL__ is replaced with var_export($menu->url, true). file_exists guard means EXISTING page files are never regenerated — hand-fix old files if the contract changes. Tests that trigger menus.store with a new URL must delete the generated resources/js/pages/dynamic/<slug> files afterwards (see MenuManagementTest try/finally).
+
+## Checklist module: real routes before catch-all; empty cells delete entries
+The infrastructure checklist has 13 categories from config/checklist.php. Real routes are registered before the /{parent}/{child} catch-all; /checklist redirects to checklist.overview. Daily save posts the full item x slot matrix and an entry with null value/status/note deletes its row so the form can clear a cell. Entries store source=manual plus user_id; checklist_items.asset_id is the future scan-page hook. Monthly export is CSV only (no PhpSpreadsheet).

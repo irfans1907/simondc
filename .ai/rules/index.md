@@ -5,7 +5,8 @@ Before planning or editing, find the row whose globs match the file's path and r
 | Applies to | Rule file |
 | --- | --- |
 | resources/js/actions/** | .ai/rules/actions.md |
-| app/Http/Controllers/FileController.php, app/Http/Controllers/**, app/Http/Controllers/PageController.php, app/Http/Controllers/MenuController.php | .ai/rules/controllers.md |
+| resources/js/pages/dynamic/checklist/** | .ai/rules/checklist.md |
+| app/Http/Controllers/FileController.php, app/Http/Controllers/**, app/Http/Controllers/PageController.php, app/Http/Controllers/MenuController.php, app/Http/Controllers/ChecklistController.php | .ai/rules/controllers.md |
 | resources/js/pages/dynamic/customer/**, app/Http/Controllers/CustomerController.php, app/Http/Requests/CustomerRequest.php, app/Models/Customer.php | .ai/rules/customer.md |
 | resources/js/pages/dynamic/** | .ai/rules/dynamic.md |
 | app/Events/** | .ai/rules/events.md |

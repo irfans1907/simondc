@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
         $this->call(AssetCategorySeeder::class);
         $this->call(RackTypeSeeder::class);
         $this->call(SpatiePermissionSeeder::class);
+        $this->call(ChecklistSeeder::class);
 
         User::factory()->create([
             'name' => 'Test User',

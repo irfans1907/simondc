@@ -5,6 +5,7 @@ use App\Http\Controllers\AssetCategoryController;
 use App\Http\Controllers\AssetController;
 use App\Http\Controllers\AssetScanController;
 use App\Http\Controllers\AssetSettingsController;
+use App\Http\Controllers\ChecklistController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\FileController;
 use App\Http\Controllers\FileShareController;
@@ -241,6 +242,28 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('customer/vlanreq', [VlanTagRequestController::class, 'store'])->name('customer.vlanreq.store');
         Route::patch('customer/vlanreq/{vlanTagRequest}', [VlanTagRequestController::class, 'update'])->name('customer.vlanreq.update');
         Route::delete('customer/vlanreq/{vlanTagRequest}', [VlanTagRequestController::class, 'destroy'])->name('customer.vlanreq.destroy');
+    });
+
+    // The checklist module root redirects to its overview child page. Real
+    // checklist routes must be registered before the dynamic child catch-all
+    // below so /checklist/{child} never falls through to a placeholder page.
+    Route::middleware('permission:view-checklist|manage-checklist')->group(function () {
+        Route::get('checklist', [ChecklistController::class, 'index']);
+        Route::get('checklist/overview', [ChecklistController::class, 'overview'])
+            ->name('checklist.overview');
+        Route::get('checklist/dailycheck', [ChecklistController::class, 'dailycheck'])
+            ->name('checklist.dailycheck');
+        Route::get('checklist/monthlycheck', [ChecklistController::class, 'monthlycheck'])
+            ->name('checklist.monthlycheck');
+    });
+
+    Route::middleware('permission:manage-checklist')->group(function () {
+        Route::get('checklist/export', [ChecklistController::class, 'export'])
+            ->name('checklist.export');
+        Route::post('checklist/entries', [ChecklistController::class, 'storeEntries'])
+            ->name('checklist.entries.store');
+        Route::delete('checklist/entries/{entry}', [ChecklistController::class, 'destroyEntry'])
+            ->name('checklist.entries.destroy');
     });
 
     // The monitoring module root redirects to its overview child page; every
