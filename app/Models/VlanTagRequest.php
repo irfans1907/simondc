@@ -68,9 +68,9 @@ class VlanTagRequest extends Model
                 $context = $this->describeVlanTagRequestContext();
 
                 return match ($eventName) {
-                    'created' => 'created VLAN tag request "'.$this->order_number.'"'.$context,
+                    'created' => 'created VLAN tag request for order number "'.$this->order_number.'"'.$context,
                     'updated' => $this->describeVlanTagRequestUpdate(),
-                    'deleted' => 'deleted VLAN tag request "'.$this->order_number.'"'.$context,
+                    'deleted' => 'deleted VLAN tag request for order number "'.$this->order_number.'"'.$context,
                     default => $eventName,
                 };
             });
@@ -104,9 +104,9 @@ class VlanTagRequest extends Model
         ]);
 
         if ($parts === []) {
-            return 'updated VLAN tag request "'.$this->order_number.'"';
+            return 'updated VLAN tag request for order number "'.$this->order_number.'"';
         }
 
-        return 'updated VLAN tag request "'.$this->order_number.'": '.implode(', ', $parts);
+        return 'updated VLAN tag request for order number "'.$this->order_number.'": '.implode(', ', $parts);
     }
 }

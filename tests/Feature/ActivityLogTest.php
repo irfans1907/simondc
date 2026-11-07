@@ -970,7 +970,7 @@ test('creating a vlan tag request records its order number and customer', functi
     ]);
 
     $this->assertDatabaseHas('activity_log', [
-        'description' => 'created VLAN tag request "ORD-10001" for customer "PT Maju Jaya"',
+        'description' => 'created VLAN tag request for order number "ORD-10001" for customer "PT Maju Jaya"',
         'log_name' => 'vlan_tag_request',
         'event' => 'created',
     ]);
@@ -998,7 +998,7 @@ test('updating a vlan tag request lists every changed field with its old and new
     ]);
 
     $this->assertDatabaseHas('activity_log', [
-        'description' => 'updated VLAN tag request "ORD-10001": customer from PT Maju Jaya to PT Abadi Jaya, mode from TRUNK to ACCESS, vlan from 100 to 200',
+        'description' => 'updated VLAN tag request for order number "ORD-10001": customer from PT Maju Jaya to PT Abadi Jaya, mode from TRUNK to ACCESS, vlan from 100 to 200',
         'log_name' => 'vlan_tag_request',
         'event' => 'updated',
     ]);
@@ -1017,7 +1017,7 @@ test('deleting a vlan tag request records its order number and customer', functi
     $request->delete();
 
     $this->assertDatabaseHas('activity_log', [
-        'description' => 'deleted VLAN tag request "ORD-10001" for customer "PT Maju Jaya"',
+        'description' => 'deleted VLAN tag request for order number "ORD-10001" for customer "PT Maju Jaya"',
         'log_name' => 'vlan_tag_request',
         'event' => 'deleted',
     ]);
