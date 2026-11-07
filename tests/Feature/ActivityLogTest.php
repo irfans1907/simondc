@@ -1035,7 +1035,7 @@ test('creating a vlan tag request switch records its asset and port', function (
 
     $this->assertDatabaseHas('activity_log', [
         'description' => 'created VLAN tag request switch on asset "Cisco" port Gi0/24',
-        'log_name' => 'vlan_tag_request_switch',
+        'log_name' => 'vlan_tag_request',
         'event' => 'created',
     ]);
 });
@@ -1058,7 +1058,7 @@ test('updating a vlan tag request switch lists every changed field', function ()
 
     $this->assertDatabaseHas('activity_log', [
         'description' => 'updated VLAN tag request switch on asset "Arista": asset from Cisco to Arista, port from Gi0/1 to Gi0/24',
-        'log_name' => 'vlan_tag_request_switch',
+        'log_name' => 'vlan_tag_request',
         'event' => 'updated',
     ]);
 });
@@ -1077,7 +1077,7 @@ test('deleting a vlan tag request switch records its asset and port', function (
 
     $this->assertDatabaseHas('activity_log', [
         'description' => 'deleted VLAN tag request switch on asset "Cisco" port Gi0/24',
-        'log_name' => 'vlan_tag_request_switch',
+        'log_name' => 'vlan_tag_request',
         'event' => 'deleted',
     ]);
 });
@@ -1118,7 +1118,7 @@ test('updating a vlan tag request via the controller updates the switch instead 
 
     $this->assertDatabaseHas('activity_log', [
         'description' => 'updated VLAN tag request switch on asset "Cisco": port from Gi0/1 to Gi0/24',
-        'log_name' => 'vlan_tag_request_switch',
+        'log_name' => 'vlan_tag_request',
         'event' => 'updated',
     ]);
 });

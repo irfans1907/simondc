@@ -50,7 +50,7 @@ class VlanTagRequestSwitch extends Model
     {
         return LogOptions::defaults()
             ->logAll()
-            ->useLogName('vlan_tag_request_switch')
+            ->useLogName('vlan_tag_request')
             ->dontLogIfAttributesChangedOnly(['updated_at'])
             ->setDescriptionForEvent(function (string $eventName): string {
                 $context = $this->describeVlanTagRequestSwitchContext();
