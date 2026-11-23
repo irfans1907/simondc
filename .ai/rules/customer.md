@@ -1,9 +1,10 @@
 ---
 paths:
   - 'resources/js/pages/dynamic/customer/**'
-  - 'app/Http/Controllers/CustomerController.php'
-  - 'app/Http/Requests/CustomerRequest.php'
-  - 'app/Models/Customer.php'
+  - app/Http/Controllers/CustomerController.php
+  - app/Http/Requests/CustomerRequest.php
+  - app/Models/Customer.php
+  - 'app/Models/*.php'
 ---
 
 # Customer
@@ -28,3 +29,6 @@ The old `panel_pdu`/`mcb_number` string columns were dropped and replaced by `pa
 
 ## Page conventions (same as rack/asset)
 25 columns (No + 23 spec fields + Aksi) with `min-w-[2400px]` so horizontal scroll actually engages; footer `Pagination` renders `PerPageSelector` in one flex row (per-page left, "Showing of {total} total customers" center, links right); search whitelist = all/customer_name/city/location/service_status + `rack_code` via `whereHas` (unknown columns fall back to `all`); navigation uses Wayfinder `.url()` strings (`customerOverview.url()`), never the bare RouteDefinition.
+
+## Checklist/monthly asset integration is link-only (no monthly flag)
+Monthly Check includes every rack/customer; there is no in_monthly flag on assets or racks. Asset Settings only gates in_checklist and in_maintenance. Checklist item shapes live in checklist_item_templates (per asset category) and asset categories map to checklist categories through the checklist_category_asset_category pivot. PowerLoadRow keeps the legacy text columns `rack`/`customer`, so the relations are named linkedRack() and linkedCustomer(); use panelMcb() for the MCB link.

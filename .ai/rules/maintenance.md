@@ -1,13 +1,14 @@
 ---
 paths:
   - 'resources/js/pages/dynamic/assets/maintenance/**'
-  - 'app/Http/Controllers/MaintenanceController.php'
-  - 'app/Console/Commands/AdvanceMaintenanceStatus.php'
-  - 'app/Http/Requests/MaintenanceRequest.php'
-  - 'app/Models/Maintenance.php'
+  - app/Http/Controllers/MaintenanceController.php
+  - app/Console/Commands/AdvanceMaintenanceStatus.php
+  - app/Http/Requests/MaintenanceRequest.php
+  - app/Models/Maintenance.php
   - 'database/migrations/*maintenances_table.php'
-  - 'routes/console.php'
-  - 'tests/Feature/MaintenanceTest.php'
+  - routes/console.php
+  - tests/Feature/MaintenanceTest.php
+  - 'app/Console/Commands/**'
 ---
 
 # Maintenance
@@ -44,3 +45,6 @@ Laravel's `validated()` only contains keys that were present in the request. A f
 
 ## Export CSV
 `GET assets/maintenance/export` (name `assets.maintenance.export`) sits in the `permission:manage-asset-management` group — same as `rack/export`, so only `canManage` sees the green Export button (`MaintenanceController.exportMethod.url({ query: { search, search_column, date } })`). `export()` reuses `filteredQuery()` (active search + date filters apply), streams BOM + `fputcsv(escape: '\\')`, and its header list stays in sync with `tableHeaders` minus `Aksi` (`Tanggal Mulai,Tanggal Beres` included; the ticket column shows the Solved/Unresolved label). Date values are written raw `Y-m-d` (`end_date` falls back to `-` when null — project convention: exports carry raw values).
+
+## CCTV Kapasitas HD belongs to the DVR/NVR device
+`capacity` on the CCTV sheet is the DVR/NVR HDD capacity, not a camera property. New cameras never copy it (AssetController::cctvCameraAttributes and the device update propagation exclude capacity). Legacy rows stored one slot per channel, so `php artisan cctv:merge-capacity` moves every device/camera slot value onto the device (deduped, joined with '; ') and clears the copies on camera assets; it is idempotent.

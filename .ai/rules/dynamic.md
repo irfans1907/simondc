@@ -13,3 +13,6 @@ Every child-menu page's `.layout` must return `breadcrumbs: menuBreadcrumbs(prop
 
 ## Child breadcrumb chain: showChildCrumbs > menuBreadcrumbs > single fallback
 Every child-page .layout builds breadcrumbs as `showChildCrumbs(props) ?? menuBreadcrumbs(props.menus, <ownUrl>) ?? [single-crumb fallback]` (helpers in resources/js/lib/menu-breadcrumbs.ts). showChildCrumbs reads the server-guaranteed menu+activeChild props and is the PRIMARY source (clickable parent crumb never depends on the shared menus lookup); menuBreadcrumbs(props.menus, url) is the secondary source keyed by the exact DB menu url (Wayfinder .url() for named routes, literal path only for unnamed catch-alls); the single crumb is the last-resort fallback. Top-level pages keep single crumbs (current page = non-link by design).
+
+## Status cells use the themed Select, not native select
+Checklist status inputs (Daily Check and the asset scan checklist card) use the shadcn Select with a NONE sentinel for the empty option. Native <select> option lists render white/invisible in dark mode; keep new status dropdowns on the shared Select component.

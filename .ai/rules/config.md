@@ -1,0 +1,30 @@
+---
+paths:
+  - config/asset_list_sheets.php
+  - config/checklist.php
+---
+
+# Config
+
+## Catatan is the shared notes column; General is read-only for sheet-managed categories
+Every sheet ends with a Catatan column mapped to assets.notes. Keterangan is a computed column on every sheet (assets.name + category path, joined with newlines) and is never stored in assets.details. General (default sheet) excludes category roots managed by non-General sheets from its category tree, and AssetController rejects create/update in General when the root category is managed by another sheet. Rows managed by another sheet carry managed_sheet (sheet label) and the list page hides Edit/Hapus, showing 'Kelola di {sheet}' instead.
+
+## Keterangan is computed; UPS form fields are grouped by subcategory
+Keterangan is a computed column on every sheet: assets.name plus the category path joined with newlines. General also has a computed Kategori column next to Nama Perangkat that stacks one Badge (variant secondary) per path segment vertically, with a ChevronDown icon between levels; an empty value renders an em dash. The computed Keterangan cell renders one Badge (variant outline) per line, stacked with no separator. Neither is stored in assets.details, and the list search matches their category parts through AssetSheetHelper::categoryIdsMatching(). ups-batt uses form_groups keyed by form_group_keywords: every selected category level is matched case-insensitively against the group keywords (frame, modul, battery/baterai/batterai, electronic), and all matching groups are additive on top of the shared fields. So UPS Frame 1 + Modul 1 shows both Frame and Modul inputs. Root UPS, UPS Electronic, and an empty subcategory show the shared fields only, while an unknown custom subcategory falls back to all fields.
+
+## ups-batt renders split UPS and Battery tables linked by parent_asset_id
+ups-batt defines `tables.ups` and `tables.battery` instead of one column list. `battery_keywords` (battery/baterai/batterai, case-insensitive, matched on the category name or any ancestor via AssetSheetHelper::batteryCategoryIds()) decides which assets belong to the battery table; everything else in the sheet subtree is a UPS. AssetListController paginates them separately (`ups_page` and `battery_page`), and battery rows are grouped by parent_asset_id so a UPS with two banks keeps Nama/Merek/Kapasitas KVA in one rowSpan cell (tables.battery.shared). Battery assets require parent_asset_id (FK assets.parent_asset_id, nullOnDelete); AssetController::applyBatteryParent() rejects self/battery parents and copies name, brand, and capacity from the UPS. A battery without a parent falls back to its own name/brand/capacity and becomes its own group.
+
+`tables.ups.identity` (nama, merek, kapasitas_kva) groups UPS rows that belong to the same UPS, so those columns render once with rowSpan across every frame. `tables.ups.shared` (frame_nomor, frame_tahun, frame_sn) nests each UPS group into frames, so the frame columns render once per frame with rowSpan while the Modul/Lantai/Catatan/Aksi columns stay per row. UPS pagination is per group (`ups_page`, total shown as "grup"). The Nama field in the create/edit form is a ComboboxSelect fed by the `assetPresets` prop, so users can pick an existing name on the sheet or type a new one; choosing an existing name autofills Merek and Kapasitas KVA, and choosing an existing Frame-Nomor autofills Frame-Tahun and Frame-SN. Frame-Nomor is itself a ComboboxSelect limited to the frames of the selected name, while brand/capacity/frame year/SN remain editable.
+
+## Sheet layout keys: row_group, multi_row, autofill
+A sheet may declare `row_group.identity` (columns merged visually with rowSpan across rows that share the same device), `multi_row` (`label` + `keys` repeated per camera in the create form), and `autofill` (form columns copied when an existing name is picked). CCTV uses row_group + multi_row: identity covers nama/kategori/merek_perangkat/ip_perangkat/type/serial_number/model/tahun_operasi/ruang/lantai_perangkat; alias_perangkat, kapasitas_hd and tahun_manufaktur stay per row. FAP groups by `panel` with identity lantai/panel/merek/model, so those four columns rowSpan while system/zone/tube/etc. stay per row; its form autofill uses that same identity (panel plus Lantai/Merek/Model), so per-row fields stay blank when an existing panel is picked. Read them through AssetSheetHelper::rowGroup(), AssetSheetHelper::multiRow() and AssetSheetHelper::autofill(), never inline. Adding a column keeps the total count; `dvr_nvr` was replaced by the computed `kategori` column.
+
+## row_group.group_by decides merging, identity decides rowSpan
+CCTV groups rows by `row_group.group_by` (nama + kategori), not by the full identity list, so a shared field filled inconsistently (e.g. one row with an empty `type`) no longer splits a device into separate blocks. `identity` still lists the columns rendered once with rowSpan; `groupedPaginator()` fills those cells with the first non-empty value found in the group, while every other column (camera fields, alias_perangkat, kapasitas_hd, tahun_manufaktur) stays per row. When adding a sheet, omit `group_by` to keep grouping by identity.
+
+## FAP checklists are category-scoped
+FAP categories set 'asset_items' => false because one tab equals one panel/system. ChecklistSeeder still seeds their items, SyncAssetChecklistAction skips/deactivates asset items for them, and checklist:sync-assets --deactivate-legacy must keep their infrastructure items active. The scan page falls back to these category items when an asset has no asset-scoped items.
+
+## CCTV checklists group by device
+The cctv checklist category is asset-based but grouped by device: assets with the same name + category (e.g. two CCTV-1 channels on the same DVR) share one status row labelled "CCTV-1 DVR". SyncAssetChecklistAction::syncCctv() rebuilds one item per assigned device, sets section "CCTV", and deactivates old category/per-channel rows. Asset Settings collapses the same name+category into one row; its QR uses assets.scan.group?name=...&category=... .
