@@ -132,14 +132,18 @@ test('the list can search tickets by their ticket number', function () {
     $this->post(route('assets.troubleshoot.store'), troubleshootPayload($asset));
     $this->post(route('assets.troubleshoot.store'), troubleshootPayload($asset));
 
+    // The ticket number is derived from the primary key, which is not reset
+    // between tests on MySQL, so read the newest ticket instead of hardcoding.
+    $ticket = Troubleshoot::query()->latest('id')->firstOrFail();
+
     $this->get(route('assets.troubleshoot', [
-        'search' => 'TKT-00002',
+        'search' => $ticket->ticket_number,
         'search_column' => 'ticket_number',
     ]))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->has('troubleshoots.data', 1)
-            ->where('troubleshoots.data.0.ticket_number', 'TKT-00002')
+            ->where('troubleshoots.data.0.ticket_number', $ticket->ticket_number)
         );
 });
 
