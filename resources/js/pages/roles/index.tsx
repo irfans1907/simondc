@@ -41,16 +41,6 @@ type PaginatedRoles = {
 
 const perPageOptions = [5, 10, 15, 20, 25, 50] as const;
 
-function PermissionBadge({ granted }: { granted: boolean }) {
-    return granted ? (
-        <Badge className="border-transparent bg-green-600 text-white">
-            Yes
-        </Badge>
-    ) : (
-        <Badge variant="outline">No</Badge>
-    );
-}
-
 function PermissionsField({
     availablePermissions,
     defaultPermissions,
@@ -552,7 +542,7 @@ export default function RolesIndex({
                                                         </Badge>
                                                     ))
                                                 ) : (
-                                                    <span className="text-muted-foreground">—</span>
+                                                    <span className="text-muted-foreground">-</span>
                                                 )}
                                             </div>
                                         </td>

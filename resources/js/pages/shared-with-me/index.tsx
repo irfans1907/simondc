@@ -57,6 +57,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { displayValue } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 import {
@@ -871,7 +872,7 @@ function FileDetailsDialog({
         },
         {
             label: 'Size',
-            value: file.type === 'folder' ? '—' : formatSize(file.size),
+            value: file.type === 'folder' ? '-' : formatSize(file.size),
         },
         {
             label: 'Created at',
@@ -883,7 +884,7 @@ function FileDetailsDialog({
         },
         {
             label: 'Owner',
-            value: file.owner?.name ?? '—',
+            value: displayValue(file.owner?.name),
         },
     ];
 
@@ -1564,7 +1565,7 @@ export default function SharedWithMeIndex({
                                                     </td>
                                                     <td className="px-4 py-3 text-center">
                                                         {file.type === 'folder'
-                                                            ? '—'
+                                                            ? '-'
                                                             : formatSize(
                                                                   file.size,
                                                               )}

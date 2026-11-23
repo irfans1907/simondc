@@ -26,6 +26,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { displayValue } from '@/lib/format';
 import { index as menusIndex } from '@/routes/menus';
 
 type Menu = {
@@ -706,7 +707,7 @@ export default function MenusIndex({
                                         </td>
                                         <td className="px-4 py-3 text-center">
                                             <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-                                                {menu.url || '—'}
+                                                {displayValue(menu.url)}
                                             </code>
                                         </td>
                                         <td className="px-4 py-3 text-center">
@@ -718,7 +719,7 @@ export default function MenusIndex({
                                                         </Badge>
                                                     ))
                                                 ) : (
-                                                    <span className="text-muted-foreground text-xs">—</span>
+                                                    <span className="text-muted-foreground text-xs">-</span>
                                                 )}
                                             </div>
                                         </td>

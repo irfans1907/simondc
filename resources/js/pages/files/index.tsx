@@ -31,6 +31,15 @@ import FileShareController from '@/actions/App/Http/Controllers/FileShareControl
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
 import { StorageBar } from '@/components/storage-bar';
+import {
+    Attachment,
+    AttachmentAction,
+    AttachmentActions,
+    AttachmentContent,
+    AttachmentDescription,
+    AttachmentMedia,
+    AttachmentTitle,
+} from '@/components/ui/attachment';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -60,15 +69,7 @@ import {
 } from '@/components/ui/select';
 import { getDraggedIds, setDraggedIds } from '@/lib/file-drag';
 import { moveFiles } from '@/lib/file-move';
-import {
-    Attachment,
-    AttachmentAction,
-    AttachmentActions,
-    AttachmentContent,
-    AttachmentDescription,
-    AttachmentMedia,
-    AttachmentTitle,
-} from '@/components/ui/attachment';
+import { displayValue } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { bulkDownload, download, index, preview } from '@/routes/files';
 import type { File as FileModel, FolderBreadcrumb } from '@/types';
@@ -103,6 +104,7 @@ function fileExtension(name: string): string {
 
 function isImageFile(name: string): boolean {
     const ext = name.split('.').pop()?.toLowerCase();
+
     return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext ?? '');
 }
 
@@ -443,6 +445,7 @@ function UploadFolderDialog({ parentId }: { parentId: number | null }) {
 
         incoming.forEach((file) => {
             const relativePath = (file as File & { webkitRelativePath: string }).webkitRelativePath || file.name;
+
             if (existingPaths.has(relativePath)) {
                 duplicates.push(relativePath);
 
@@ -1746,7 +1749,7 @@ function FileDetailsDialog({
         },
         {
             label: 'Size',
-            value: file.type === 'folder' ? '—' : formatSize(file.size),
+            value: file.type === 'folder' ? '-' : formatSize(file.size),
         },
         {
             label: 'Created at',
@@ -1758,7 +1761,7 @@ function FileDetailsDialog({
         },
         {
             label: 'Owner',
-            value: file.owner?.name ?? '—',
+            value: displayValue(file.owner?.name),
         },
     ];
 
@@ -1861,7 +1864,9 @@ function ShareDialog({
     const visibleUsers = filteredUsers.slice(0, 5);
 
     const handleSearchKeyDown = (e: React.KeyboardEvent) => {
-        if (!search || visibleUsers.length === 0) return;
+        if (!search || visibleUsers.length === 0) {
+            return;
+        }
 
         if (e.key === 'ArrowDown') {
             e.preventDefault();
@@ -1967,7 +1972,11 @@ function ShareDialog({
                                 <div className="mt-2 flex flex-wrap gap-1">
                                     {selectedUsers.map((userId) => {
                                         const user = users.find((u) => u.id === userId);
-                                        if (!user) return null;
+
+                                        if (!user) {
+                                            return null;
+                                        }
+
                                         return (
                                             <span
                                                 key={userId}
@@ -2721,7 +2730,7 @@ export default function FilesIndex({
                                                     </td>
                                                     <td className="px-4 py-3 text-center">
                                                         {file.type === 'folder'
-                                                            ? '—'
+                                                            ? '-'
                                                             : formatSize(
                                                                   file.size,
                                                               )}

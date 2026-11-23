@@ -33,7 +33,7 @@ test('child menus are listed directly after their parent', function () {
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->component('menus/index')
-            ->has('paginatedMenus.data', 16)
+            ->has('paginatedMenus.data', 20)
             ->where('paginatedMenus.data.0.name', 'Dashboard')
             ->where('paginatedMenus.data.1.name', 'Monitoring')
             ->where('paginatedMenus.data.2.name', 'Overview')
@@ -45,14 +45,18 @@ test('child menus are listed directly after their parent', function () {
             ->where('paginatedMenus.data.7.name', 'Asset Management')
             ->where('paginatedMenus.data.8.name', 'Overview')
             ->where('paginatedMenus.data.8.parent_id', $assets->id)
-            ->where('paginatedMenus.data.9.name', 'Category List')
-            ->where('paginatedMenus.data.10.name', 'Panel Power List')
-            ->where('paginatedMenus.data.11.name', 'Rack Management')
-            ->where('paginatedMenus.data.12.name', 'Overview')
-            ->where('paginatedMenus.data.12.parent_id', $rack->id)
-            ->where('paginatedMenus.data.13.name', 'Rack List')
-            ->where('paginatedMenus.data.14.name', 'My Files')
-            ->where('paginatedMenus.data.15.name', 'Shared with Me'));
+            ->where('paginatedMenus.data.9.name', 'Asset List')
+            ->where('paginatedMenus.data.10.name', 'Category List')
+            ->where('paginatedMenus.data.11.name', 'Panel Power List')
+            ->where('paginatedMenus.data.12.name', 'Maintenance')
+            ->where('paginatedMenus.data.13.name', 'Troubleshoot')
+            ->where('paginatedMenus.data.14.name', 'Asset Settings')
+            ->where('paginatedMenus.data.15.name', 'Rack Management')
+            ->where('paginatedMenus.data.16.name', 'Overview')
+            ->where('paginatedMenus.data.16.parent_id', $rack->id)
+            ->where('paginatedMenus.data.17.name', 'Rack List')
+            ->where('paginatedMenus.data.18.name', 'My Files')
+            ->where('paginatedMenus.data.19.name', 'Shared with Me'));
 });
 
 test('the same menu name is allowed under different parents', function () {
@@ -117,7 +121,15 @@ test('seeding creates the asset and rack menus with their children', function ()
     expect($assets->url)->toBe('/assets');
 
     $assetChildren = Menu::where('parent_id', $assets->id)->orderBy('order')->get(['name', 'url']);
-    expect($assetChildren->pluck('url')->all())->toBe(['/assets/overview', '/assets/categorylist', '/assets/panelpowerlist']);
+    expect($assetChildren->pluck('url')->all())->toBe([
+        '/assets/overview',
+        '/assets/list',
+        '/assets/categorylist',
+        '/assets/panelpowerlist',
+        '/assets/maintenance',
+        '/assets/troubleshoot',
+        '/assets/settings',
+    ]);
 
     $rack = Menu::where('name', 'Rack Management')->firstOrFail();
     expect($rack->url)->toBe('/rack');

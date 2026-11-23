@@ -1,4 +1,4 @@
-import { Form, Head, Link, router as inertiaRouter } from '@inertiajs/react';
+import { Head, Link, router as inertiaRouter } from '@inertiajs/react';
 import { router } from '@inertiajs/react';
 import { useEchoPublic } from '@laravel/echo-react';
 import { Pencil, Plus, Search, Trash2, X } from 'lucide-react';
@@ -469,7 +469,7 @@ export default function PermissionsIndex({
                                                         </Badge>
                                                     ))
                                                 ) : (
-                                                    <span className="text-muted-foreground">—</span>
+                                                    <span className="text-muted-foreground">-</span>
                                                 )}
                                             </div>
                                         </td>

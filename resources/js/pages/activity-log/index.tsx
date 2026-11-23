@@ -43,7 +43,7 @@ const eventVariants: Record<string, 'default' | 'secondary' | 'destructive' | 'o
 
 function EventBadge({ event }: { event: string | null }) {
     if (!event) {
-        return <Badge variant="outline">—</Badge>;
+        return <Badge variant="outline">-</Badge>;
     }
 
     return (
@@ -53,7 +53,7 @@ function EventBadge({ event }: { event: string | null }) {
 
 function formatDate(value: string | null): string {
     if (!value) {
-        return '—';
+        return '-';
     }
 
     return new Date(value).toLocaleString('en-GB', {
@@ -147,10 +147,6 @@ function DateFilter({
     const [selected, setSelected] = useState<Date | undefined>(
         date ? new Date(`${date}T00:00:00`) : undefined,
     );
-
-    useEffect(() => {
-        setSelected(date ? new Date(`${date}T00:00:00`) : undefined);
-    }, [date]);
 
     function applyDate(value: string) {
         router.get(
@@ -400,6 +396,7 @@ export default function ActivityLogIndex({
                             sort={filters.sort}
                         />
                         <DateFilter
+                            key={filters.date}
                             date={filters.date}
                             search={filters.search}
                             perPage={filters.per_page}

@@ -25,6 +25,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { displayValue } from '@/lib/format';
 import { menuBreadcrumbs, showChildCrumbs } from '@/lib/menu-breadcrumbs';
 import type { MenuRow } from '@/lib/menu-breadcrumbs';
 import { overview as rackOverview } from '@/routes/rack';
@@ -817,7 +818,7 @@ export default function RackIndex({
                                             {rack.operation_year}
                                         </td>
                                         <td className="px-4 py-3 text-center">
-                                            {rack.notes ?? '—'}
+                                            {displayValue(rack.notes)}
                                         </td>
                                         <td className="px-4 py-3">
                                             {canManage && (

@@ -103,6 +103,24 @@ export default [
         },
     },
     {
+        files: ['resources/js/pages/**/*.tsx'],
+        rules: {
+            'no-restricted-syntax': [
+                'error',
+                {
+                    selector: "Literal[value='—']",
+                    message:
+                        "Placeholder sel kosong pakai '-' atau displayValue() dari '@/lib/format'.",
+                },
+                {
+                    selector: 'JSXText[value=/^\\s*—\\s*$/]',
+                    message:
+                        "Placeholder sel kosong pakai '-' atau displayValue() dari '@/lib/format'.",
+                },
+            ],
+        },
+    },
+    {
         ignores: [
             'vendor',
             'node_modules',
