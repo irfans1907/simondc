@@ -236,12 +236,14 @@ class CustomerController extends Controller
             return [];
         }
 
+        // Sort in PHP so the dropdown order is identical on every database
+        // collation (MySQL's _ci collation puts "Cisco" before "CRS3xx").
         return Asset::query()
             ->whereIn('category_id', $categoryIds)
             ->distinct()
-            ->orderBy('name')
             ->pluck('name')
             ->filter(fn (string $name) => $name !== '' && $name !== '-')
+            ->sortBy(fn (string $name): string => mb_strtolower($name))
             ->values()
             ->all();
     }

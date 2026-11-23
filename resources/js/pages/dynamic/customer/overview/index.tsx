@@ -25,6 +25,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { displayValue } from '@/lib/format';
 import { menuBreadcrumbs, showChildCrumbs } from '@/lib/menu-breadcrumbs';
 import type { MenuRow } from '@/lib/menu-breadcrumbs';
 import { overview as customerOverview } from '@/routes/customer';
@@ -1180,20 +1181,20 @@ export default function CustomerIndex({
                                                 1}
                                         </td>
                                         <td className="px-4 py-3 text-center font-medium whitespace-nowrap">
-                                            {customer.rack?.rack_code ?? '—'}
+                                            {displayValue(customer.rack?.rack_code)}
                                         </td>
                                         <Cell>{customer.city}</Cell>
                                         <Cell>{customer.location}</Cell>
                                         <Cell>{customer.customer_name}</Cell>
-                                        <Cell>{customer.rack?.type ?? '—'}</Cell>
+                                        <Cell>{displayValue(customer.rack?.type)}</Cell>
                                         <Cell>
-                                            {customer.service_type ?? '—'}
+                                            {displayValue(customer.service_type)}
                                         </Cell>
                                         <Cell>
-                                            {customer.sales_channel ?? '—'}
+                                            {displayValue(customer.sales_channel)}
                                         </Cell>
                                         <Cell>
-                                            {customer.business_status ?? '—'}
+                                            {displayValue(customer.business_status)}
                                         </Cell>
                                         <Cell>
                                             <Badge
@@ -1208,21 +1209,22 @@ export default function CustomerIndex({
                                                         : 'text-muted-foreground'
                                                 }
                                             >
-                                                {customer.service_status ?? '—'}
+                                                {displayValue(customer.service_status)}
                                             </Badge>
                                         </Cell>
                                         <Cell>
-                                            {customer.order_number ?? '—'}
+                                            {displayValue(customer.order_number)}
                                         </Cell>
-                                        <Cell>{customer.sid_rack ?? '—'}</Cell>
+                                        <Cell>{displayValue(customer.sid_rack)}</Cell>
                                         <Cell>
-                                            {customer.activation_date ?? '—'}
+                                            {displayValue(customer.activation_date)}
                                         </Cell>
                                         <Cell>
                                             <div className="grid gap-1 justify-items-center">
                                                 <span>
-                                                    {customer.power_source ??
-                                                        '—'}
+                                                    {displayValue(
+                                                        customer.power_source,
+                                                    )}
                                                 </span>
                                                 {outletShortage(
                                                     customer.power_source,
@@ -1238,37 +1240,43 @@ export default function CustomerIndex({
                                             </div>
                                         </Cell>
                                         <Cell>
-                                            {[
-                                                customer.panel_asset?.name,
-                                                customer.panel_asset2?.name,
-                                            ]
-                                                .filter(Boolean)
-                                                .join(' + ') || '—'}
+                                            {displayValue(
+                                                [
+                                                    customer.panel_asset?.name,
+                                                    customer.panel_asset2?.name,
+                                                ]
+                                                    .filter(Boolean)
+                                                    .join(' + '),
+                                            )}
                                         </Cell>
                                         <Cell>
-                                            {[
-                                                customer.panel_mcb?.mcb_number,
-                                                customer.panel_mcb2?.mcb_number,
-                                            ]
-                                                .filter(Boolean)
-                                                .join(' + ') || '—'}
+                                            {displayValue(
+                                                [
+                                                    customer.panel_mcb
+                                                        ?.mcb_number,
+                                                    customer.panel_mcb2
+                                                        ?.mcb_number,
+                                                ]
+                                                    .filter(Boolean)
+                                                    .join(' + '),
+                                            )}
                                         </Cell>
                                         <Cell>
-                                            {customer.connectivity ?? '—'}
+                                            {displayValue(customer.connectivity)}
                                         </Cell>
-                                        <Cell>{customer.ip_address ?? '—'}</Cell>
+                                        <Cell>{displayValue(customer.ip_address)}</Cell>
                                         <Cell>
-                                            {customer.switch_type ?? '—'}
+                                            {displayValue(customer.switch_type)}
                                         </Cell>
                                         <Cell>
-                                            {customer.service_vlan ?? '—'}
+                                            {displayValue(customer.service_vlan)}
                                         </Cell>
-                                        <Cell>{customer.vlan ?? '—'}</Cell>
-                                        <Cell>{customer.port ?? '—'}</Cell>
+                                        <Cell>{displayValue(customer.vlan)}</Cell>
+                                        <Cell>{displayValue(customer.port)}</Cell>
                                         <Cell>
-                                            {customer.account_manager ?? '—'}
+                                            {displayValue(customer.account_manager)}
                                         </Cell>
-                                        <Cell>{customer.notes ?? '—'}</Cell>
+                                        <Cell>{displayValue(customer.notes)}</Cell>
                                         <td className="px-4 py-3">
                                             {canManage && (
                                                 <div className="flex items-center justify-center gap-2">

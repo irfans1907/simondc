@@ -483,7 +483,7 @@ test('switch options list device names from the switch category only', function 
     $this->get(route('customer.overview'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('switchOptions', ['CRS3xx', 'Cisco'])
+            ->where('switchOptions', ['Cisco', 'CRS3xx'])
         );
 });
 
