@@ -5,6 +5,7 @@ namespace App\Models;
 use Database\Factories\PowerPduFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PowerPdu extends Model
@@ -18,6 +19,7 @@ class PowerPdu extends Model
      * @var list<string>
      */
     protected $fillable = [
+        'asset_id',
         'floor',
         'code',
         'name',
@@ -35,6 +37,16 @@ class PowerPdu extends Model
         'sort_order' => 'integer',
         'is_active' => 'boolean',
     ];
+
+    /**
+     * The Panel Power asset behind this PDU, when it has been linked.
+     *
+     * @return BelongsTo<Asset, $this>
+     */
+    public function asset(): BelongsTo
+    {
+        return $this->belongsTo(Asset::class);
+    }
 
     /**
      * The load rows recorded under this PDU.

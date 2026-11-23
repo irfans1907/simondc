@@ -40,7 +40,13 @@ class MonthlyCheckController extends Controller
             ->orderBy('floor')
             ->orderBy('sort_order')
             ->orderBy('code')
-            ->with(['rows' => fn ($query) => $query->orderBy('sort_order')])
+            ->with(['rows' => fn ($query) => $query
+                ->orderBy('sort_order')
+                ->with([
+                    'linkedRack:id,rack_code,type',
+                    'linkedCustomer:id,customer_name',
+                    'panelMcb:id,mcb_number',
+                ])])
             ->get();
 
         $pdusByFloor = [
@@ -61,10 +67,10 @@ class MonthlyCheckController extends Controller
                 $reading = $readings->get($row->id);
                 $rows[] = [
                     'id' => $row->id,
-                    'customer' => $row->customer,
-                    'rack' => $row->rack,
-                    'rack_type' => $row->rack_type,
-                    'mcb' => $row->mcb,
+                    'customer' => $row->linkedCustomer?->customer_name ?? $row->customer,
+                    'rack' => $row->linkedRack?->rack_code ?? $row->rack,
+                    'rack_type' => $row->linkedRack?->type ?? $row->rack_type,
+                    'mcb' => $row->panelMcb?->mcb_number ?? $row->mcb,
                     'capacity_amp' => $row->capacity_amp,
                     'phase' => $row->phase,
                     'service' => $row->service,
@@ -239,7 +245,13 @@ class MonthlyCheckController extends Controller
                 ->where('is_active', true)
                 ->orderBy('sort_order')
                 ->orderBy('code')
-                ->with(['rows' => fn ($query) => $query->orderBy('sort_order')])
+                ->with(['rows' => fn ($query) => $query
+                    ->orderBy('sort_order')
+                    ->with([
+                        'linkedRack:id,rack_code,type',
+                        'linkedCustomer:id,customer_name',
+                        'panelMcb:id,mcb_number',
+                    ])])
                 ->get();
 
             $monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
@@ -259,11 +271,11 @@ class MonthlyCheckController extends Controller
 
                     $line = [
                         ++$row,
-                        $r->customer ?? '-',
-                        $r->rack ?? '-',
-                        $r->rack_type ?? '-',
+                        $r->linkedCustomer?->customer_name ?? $r->customer ?? '-',
+                        $r->linkedRack?->rack_code ?? $r->rack ?? '-',
+                        $r->linkedRack?->type ?? $r->rack_type ?? '-',
                         $pdu->code,
-                        $r->mcb ?? '-',
+                        $r->panelMcb?->mcb_number ?? $r->mcb ?? '-',
                         $r->capacity_amp ?? '-',
                         $r->phase ?? '-',
                         $r->service ?? '-',

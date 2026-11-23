@@ -20,6 +20,9 @@ class PowerLoadRow extends Model
      */
     protected $fillable = [
         'power_pdu_id',
+        'rack_id',
+        'customer_id',
+        'panel_mcb_id',
         'customer',
         'rack',
         'rack_type',
@@ -48,6 +51,38 @@ class PowerLoadRow extends Model
     public function pdu(): BelongsTo
     {
         return $this->belongsTo(PowerPdu::class, 'power_pdu_id');
+    }
+
+    /**
+     * The rack this load row belongs to, when linked. Named "linked" so the
+     * legacy free-text `rack` column stays readable via the attribute.
+     *
+     * @return BelongsTo<Rack, $this>
+     */
+    public function linkedRack(): BelongsTo
+    {
+        return $this->belongsTo(Rack::class, 'rack_id');
+    }
+
+    /**
+     * The customer occupying the rack, when linked. Named "linked" so the
+     * legacy free-text `customer` column stays readable via the attribute.
+     *
+     * @return BelongsTo<Customer, $this>
+     */
+    public function linkedCustomer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'customer_id');
+    }
+
+    /**
+     * The panel MCB feeding this row, when linked.
+     *
+     * @return BelongsTo<PanelMcb, $this>
+     */
+    public function panelMcb(): BelongsTo
+    {
+        return $this->belongsTo(PanelMcb::class);
     }
 
     /**

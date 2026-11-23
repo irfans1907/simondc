@@ -5,6 +5,7 @@ namespace App\Models;
 use Database\Factories\PowerPanelFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PowerPanel extends Model
@@ -25,6 +26,7 @@ class PowerPanel extends Model
      * @var list<string>
      */
     protected $fillable = [
+        'asset_id',
         'panel_group',
         'name',
         'capacity',
@@ -44,6 +46,16 @@ class PowerPanel extends Model
         'sort_order' => 'integer',
         'is_active' => 'boolean',
     ];
+
+    /**
+     * The Panel Power asset behind this PUE panel, when it has been linked.
+     *
+     * @return BelongsTo<Asset, $this>
+     */
+    public function asset(): BelongsTo
+    {
+        return $this->belongsTo(Asset::class);
+    }
 
     /**
      * The monthly readings for this panel.

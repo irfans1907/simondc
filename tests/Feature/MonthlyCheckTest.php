@@ -1,9 +1,11 @@
 <?php
 
+use App\Models\Customer;
 use App\Models\PowerLoadReading;
 use App\Models\PowerPanel;
 use App\Models\PowerPanelReading;
 use App\Models\PowerPdu;
+use App\Models\Rack;
 use App\Models\User;
 use Database\Seeders\ChecklistSeeder;
 use Database\Seeders\PowerConsumptionSeeder;
@@ -65,6 +67,30 @@ test('the monthly page loads the power load tab by default', function () {
 
     expect(PowerPdu::where('floor', 2)->count())->toBe(8);
     expect(PowerPdu::where('floor', 4)->count())->toBe(12);
+});
+
+test('the monthly page shows linked customer and rack names when present', function () {
+    $user = monthlyCheckUser();
+
+    $pdu = PowerPdu::query()->where('floor', 2)->firstOrFail();
+    $row = $pdu->rows()->firstOrFail();
+
+    $rack = Rack::factory()->create(['rack_code' => 'NLBL-LINKED']);
+    $customer = Customer::factory()->create([
+        'rack_id' => $rack->id,
+        'customer_name' => 'Linked Customer',
+    ]);
+
+    $row->update(['rack_id' => $rack->id, 'customer_id' => $customer->id]);
+
+    $this->actingAs($user);
+
+    $this->get(route('checklist.monthlycheck'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('rowsByPdu.'.$pdu->id.'.0.customer', 'Linked Customer')
+            ->where('rowsByPdu.'.$pdu->id.'.0.rack', 'NLBL-LINKED')
+        );
 });
 
 test('the pue tab loads panels and summary', function () {
