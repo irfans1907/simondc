@@ -27,9 +27,18 @@ import {
 import { menuBreadcrumbs, showChildCrumbs } from '@/lib/menu-breadcrumbs';
 import type { MenuRow } from '@/lib/menu-breadcrumbs';
 
-type AssetRow = {
+type AssetMember = {
     id: number;
     name: string;
+    category: string | null;
+    serial_number: string;
+};
+
+type AssetRow = {
+    id: number;
+    asset_ids: number[];
+    name: string;
+    category: string | null;
     brand: string;
     model: string;
     serial_number: string;
@@ -41,6 +50,15 @@ type AssetRow = {
     room: string;
     in_checklist: boolean;
     in_maintenance: boolean;
+    checklist_category_id: number | null;
+    scan_group: { name: string; category_id: number } | null;
+    members: AssetMember[];
+};
+
+type ChecklistCategoryOption = {
+    id: number;
+    name: string;
+    slug: string;
 };
 
 type PaginatedAssets = {
@@ -59,6 +77,9 @@ type AssetSettingsFilters = {
 };
 
 type FlagColumn = 'in_checklist' | 'in_maintenance';
+
+const CHECKLIST_NONE = 'none';
+const CHECKLIST_UNASSIGNED = 'unassigned';
 
 const perPageOptions = [5, 10, 15, 20, 25, 50] as const;
 
@@ -112,6 +133,81 @@ function FlagRadios({
     );
 }
 
+function ChecklistSelect({
+    asset,
+    categories,
+    disabled,
+    onChange,
+}: {
+    asset: AssetRow;
+    categories: ChecklistCategoryOption[];
+    disabled: boolean;
+    onChange: (next: {
+        inChecklist: boolean;
+        categoryId: number | null;
+    }) => void;
+}) {
+    const value = !asset.in_checklist
+        ? CHECKLIST_NONE
+        : asset.checklist_category_id !== null
+          ? String(asset.checklist_category_id)
+          : CHECKLIST_UNASSIGNED;
+
+    return (
+        <Select
+            value={value}
+            disabled={disabled}
+            onValueChange={(next) => {
+                if (next === CHECKLIST_NONE) {
+                    onChange({ inChecklist: false, categoryId: null });
+
+                    return;
+                }
+
+                if (next === CHECKLIST_UNASSIGNED) {
+                    onChange({ inChecklist: true, categoryId: null });
+
+                    return;
+                }
+
+                onChange({ inChecklist: true, categoryId: Number(next) });
+            }}
+        >
+            <SelectTrigger className="h-10 w-full min-w-[240px]">
+                <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+                <SelectItem value={CHECKLIST_NONE} className="py-2">
+                    Tidak masuk checklist
+                </SelectItem>
+                <SelectItem value={CHECKLIST_UNASSIGNED} className="py-2">
+                    Belum dipilih
+                </SelectItem>
+                {categories.map((category) => (
+                    <SelectItem
+                        key={category.id}
+                        value={String(category.id)}
+                        className="py-2"
+                    >
+                        {category.name}
+                    </SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
+    );
+}
+
+type QrCodeEntry = AssetMember & { src: string };
+
+function qrSlug(name: string, id: number): string {
+    return (
+        name
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '') || `asset-${id}`
+    );
+}
+
 function QrCodeDialog({
     asset,
     onClose,
@@ -119,7 +215,7 @@ function QrCodeDialog({
     asset: AssetRow | null;
     onClose: () => void;
 }) {
-    const [qrSrc, setQrSrc] = useState<string | null>(null);
+    const [qrCode, setQrCode] = useState<QrCodeEntry | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -129,17 +225,35 @@ function QrCodeDialog({
 
         let cancelled = false;
 
+        const target: AssetMember = asset.members[0] ?? {
+            id: asset.id,
+            name: asset.name,
+            category: asset.category,
+            serial_number: asset.serial_number,
+        };
+
         // The QR encodes the scan page URL on the origin the admin is
-        // browsing from, so devices on the same host can open it.
+        // browsing from, so devices on the same host can open it. Grouped
+        // rows use one sticker for the whole group: UPS by name, CCTV by
+        // name plus device category.
         const scanUrl = new URL(
-            AssetScanController.show.url(asset.id),
+            asset.members.length > 1
+                ? AssetScanController.group.url({
+                      query: asset.scan_group
+                          ? {
+                                name: asset.scan_group.name,
+                                category: asset.scan_group.category_id,
+                            }
+                          : { name: asset.name },
+                  })
+                : AssetScanController.show.url(target.id),
             window.location.origin,
         ).href;
 
         toDataURL(scanUrl, { width: 320, margin: 2 })
             .then((src) => {
                 if (!cancelled) {
-                    setQrSrc(src);
+                    setQrCode({ ...target, src });
                 }
             })
             .catch(() => {
@@ -154,7 +268,7 @@ function QrCodeDialog({
     }, [asset]);
 
     function close(): void {
-        setQrSrc(null);
+        setQrCode(null);
         setError(null);
         onClose();
     }
@@ -163,11 +277,7 @@ function QrCodeDialog({
         return null;
     }
 
-    const slug =
-        asset.name
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-+|-+$/g, '') || `asset-${asset.id}`;
+    const isGroup = asset.members.length > 1;
 
     return (
         <Dialog
@@ -182,43 +292,56 @@ function QrCodeDialog({
                 <DialogHeader>
                     <DialogTitle>QR {asset.name}</DialogTitle>
                     <DialogDescription>
-                        Pindai QR untuk membuka halaman scan aset ini.
+                        {isGroup
+                            ? `Satu QR untuk seluruh grup ini (${asset.members.length} aset). Pindai untuk membuka halaman scan grup.`
+                            : 'Pindai QR untuk membuka halaman scan aset ini.'}
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="flex justify-center">
-                    {error ? (
-                        <p className="text-sm text-destructive">{error}</p>
-                    ) : qrSrc ? (
-                        <img
-                            src={qrSrc}
-                            alt={`QR ${asset.name}`}
-                            className="size-64 rounded-lg border border-sidebar-border/70 bg-white"
-                        />
-                    ) : (
-                        <p className="text-sm text-muted-foreground">
-                            Membuat QR code...
-                        </p>
-                    )}
-                </div>
+                {error ? (
+                    <p className="text-sm text-destructive">{error}</p>
+                ) : qrCode === null ? (
+                    <p className="text-sm text-muted-foreground">
+                        Membuat QR code...
+                    </p>
+                ) : (
+                    <div className="flex justify-center">
+                        <div className="flex flex-col items-center gap-2 rounded-lg border border-sidebar-border/70 p-3">
+                            <img
+                                src={qrCode.src}
+                                alt={`QR ${qrCode.name}`}
+                                className="size-48 rounded-md bg-white"
+                            />
+                            <div className="text-center text-sm">
+                                <p className="font-medium">{qrCode.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                    {isGroup
+                                        ? `${asset.members.length} aset dalam grup`
+                                        : [
+                                              qrCode.category,
+                                              qrCode.serial_number,
+                                          ]
+                                              .filter(Boolean)
+                                              .join(' · ') || `ID ${qrCode.id}`}
+                                </p>
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                    const link = document.createElement('a');
+                                    link.href = qrCode.src;
+                                    link.download = `qr-${qrSlug(qrCode.name, qrCode.id)}.png`;
+                                    link.click();
+                                }}
+                            >
+                                Unduh PNG
+                            </Button>
+                        </div>
+                    </div>
+                )}
 
                 <DialogFooter>
-                    <Button
-                        variant="outline"
-                        disabled={!qrSrc}
-                        onClick={() => {
-                            if (!qrSrc) {
-                                return;
-                            }
-
-                            const link = document.createElement('a');
-                            link.href = qrSrc;
-                            link.download = `qr-${slug}.png`;
-                            link.click();
-                        }}
-                    >
-                        Unduh PNG
-                    </Button>
                     <DialogClose asChild>
                         <Button>Tutup</Button>
                     </DialogClose>
@@ -342,7 +465,8 @@ function PerPageSelector({
             AssetSettingsController.index.url(),
             {
                 search: search || undefined,
-                search_column: searchColumn !== 'all' ? searchColumn : undefined,
+                search_column:
+                    searchColumn !== 'all' ? searchColumn : undefined,
                 per_page: value || undefined,
             },
             {
@@ -442,10 +566,12 @@ export default function AssetsSettings({
     assets,
     filters,
     canManage,
+    checklistCategories,
 }: {
     assets: PaginatedAssets;
     filters: AssetSettingsFilters;
     canManage: boolean;
+    checklistCategories: ChecklistCategoryOption[];
 }) {
     useEchoPublic('assets', '.assets.changed', () => {
         router.reload();
@@ -455,16 +581,36 @@ export default function AssetsSettings({
     const [qrAsset, setQrAsset] = useState<AssetRow | null>(null);
 
     function toggleFlag(
-        assetId: number,
+        asset: AssetRow,
         column: FlagColumn,
         next: boolean,
     ): void {
         router.patch(
-            AssetSettingsController.update.url(assetId),
-            { [column]: next },
+            AssetSettingsController.bulkUpdate.url(),
+            { asset_ids: asset.asset_ids, [column]: next },
             {
                 preserveScroll: true,
-                onStart: () => setSavingId(assetId),
+                onStart: () => setSavingId(asset.id),
+                onFinish: () => setSavingId(null),
+            },
+        );
+    }
+
+    function saveChecklist(
+        asset: AssetRow,
+        inChecklist: boolean,
+        categoryId: number | null,
+    ): void {
+        router.patch(
+            AssetSettingsController.bulkUpdate.url(),
+            {
+                asset_ids: asset.asset_ids,
+                in_checklist: inChecklist,
+                checklist_category_id: categoryId,
+            },
+            {
+                preserveScroll: true,
+                onStart: () => setSavingId(asset.id),
                 onFinish: () => setSavingId(null),
             },
         );
@@ -539,20 +685,22 @@ export default function AssetsSettings({
                                         <td className="px-4 py-3 text-center font-medium">
                                             {asset.name}
                                         </td>
-                                        <td className="px-4 py-3">
-                                            <FlagRadios
-                                                assetId={asset.id}
-                                                column="in_checklist"
-                                                value={asset.in_checklist}
+                                        <td className="min-w-[260px] px-4 py-3">
+                                            <ChecklistSelect
+                                                asset={asset}
+                                                categories={checklistCategories}
                                                 disabled={
                                                     !canManage ||
                                                     savingId !== null
                                                 }
-                                                onChange={(next) =>
-                                                    toggleFlag(
-                                                        asset.id,
-                                                        'in_checklist',
-                                                        next,
+                                                onChange={({
+                                                    inChecklist,
+                                                    categoryId,
+                                                }) =>
+                                                    saveChecklist(
+                                                        asset,
+                                                        inChecklist,
+                                                        categoryId,
                                                     )
                                                 }
                                             />
@@ -568,7 +716,7 @@ export default function AssetsSettings({
                                                 }
                                                 onChange={(next) =>
                                                     toggleFlag(
-                                                        asset.id,
+                                                        asset,
                                                         'in_maintenance',
                                                         next,
                                                     )
@@ -603,6 +751,7 @@ export default function AssetsSettings({
                 />
 
                 <QrCodeDialog
+                    key={qrAsset?.id ?? 'closed'}
                     asset={qrAsset}
                     onClose={() => setQrAsset(null)}
                 />
@@ -616,8 +765,7 @@ AssetsSettings.layout = (props: {
     menu: { name: string; url: string };
     activeChild?: { name: string; url: string };
 }) => ({
-    breadcrumbs:
-        showChildCrumbs(props) ??
+    breadcrumbs: showChildCrumbs(props) ??
         menuBreadcrumbs(props.menus, '/assets/settings') ?? [
             { title: props.menu.name, href: props.menu.url },
         ],

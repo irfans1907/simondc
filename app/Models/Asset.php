@@ -23,7 +23,11 @@ class Asset extends Model
      */
     protected $fillable = [
         'name',
+        'alias',
+        'ip_address',
+        'owner',
         'category_id',
+        'parent_asset_id',
         'subcategory_id',
         'brand',
         'type',
@@ -36,8 +40,21 @@ class Asset extends Model
         'floor',
         'room',
         'notes',
+        'details',
         'in_checklist',
         'in_maintenance',
+        'checklist_category_id',
+    ];
+
+    /**
+     * Mirror the database defaults so a freshly created model already knows
+     * it belongs to the checklist and maintenance modules.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'in_checklist' => true,
+        'in_maintenance' => true,
     ];
 
     /**
@@ -48,11 +65,50 @@ class Asset extends Model
     protected $casts = [
         'in_checklist' => 'boolean',
         'in_maintenance' => 'boolean',
+        'details' => 'array',
     ];
 
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    /**
+     * The UPS asset this battery belongs to. Null for non-battery assets.
+     */
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_asset_id');
+    }
+
+    /**
+     * Battery assets attached to this UPS asset.
+     *
+     * @return HasMany<Asset, $this>
+     */
+    public function batteries(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_asset_id');
+    }
+
+    /**
+     * Assets that belong to this one through parent_asset_id: battery units
+     * of a UPS and camera channels of a DVR/NVR.
+     *
+     * @return HasMany<Asset, $this>
+     */
+    public function children(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_asset_id');
+    }
+
+    /**
+     * The checklist category this asset's generated items are filed under.
+     * Chosen per asset in Asset Settings; empty means "belum dipilih".
+     */
+    public function checklistCategory(): BelongsTo
+    {
+        return $this->belongsTo(ChecklistCategory::class);
     }
 
     /**

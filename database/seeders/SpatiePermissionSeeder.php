@@ -79,8 +79,12 @@ class SpatiePermissionSeeder extends Seeder
             ],
             'Asset Management' => [
                 ['name' => 'Overview', 'url' => '/assets/overview', 'order' => 0],
-                ['name' => 'Category List', 'url' => '/assets/categorylist', 'order' => 1],
-                ['name' => 'Panel Power List', 'url' => '/assets/panelpowerlist', 'order' => 2],
+                ['name' => 'Asset List', 'url' => '/assets/list', 'order' => 1],
+                ['name' => 'Category List', 'url' => '/assets/categorylist', 'order' => 2],
+                ['name' => 'Panel Power List', 'url' => '/assets/panelpowerlist', 'order' => 3],
+                ['name' => 'Maintenance', 'url' => '/assets/maintenance', 'order' => 4],
+                ['name' => 'Troubleshoot', 'url' => '/assets/troubleshoot', 'order' => 5],
+                ['name' => 'Asset Settings', 'url' => '/assets/settings', 'order' => 6],
             ],
             'Rack Management' => [
                 ['name' => 'Overview', 'url' => '/rack/overview', 'order' => 0],

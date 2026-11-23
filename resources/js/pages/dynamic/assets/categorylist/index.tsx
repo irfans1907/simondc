@@ -1,7 +1,15 @@
 import { Form, Head, router } from '@inertiajs/react';
 import { useEchoPublic } from '@laravel/echo-react';
-import { ArrowDown, ArrowUp, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import {
+    ArrowDown,
+    ArrowUp,
+    Pencil,
+    Plus,
+    Search,
+    Trash2,
+    X,
+} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import AssetCategoryController from '@/actions/App/Http/Controllers/AssetCategoryController';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
@@ -43,7 +51,10 @@ type Props = {
     canManage: boolean;
 };
 
-export default function AssetCategorylistIndex({ categories, canManage }: Props) {
+export default function AssetCategorylistIndex({
+    categories,
+    canManage,
+}: Props) {
     useEchoPublic('assets', '.assets.changed', () => {
         router.reload();
     });
@@ -93,8 +104,12 @@ export default function AssetCategorylistIndex({ categories, canManage }: Props)
         for (const category of sorted) {
             ancestorMatched.length = category.depth;
 
-            const parentMatched = category.depth > 0 ? ancestorMatched[category.depth - 1] : false;
-            const isShown = parentMatched || category.name.toLowerCase().includes(query);
+            const parentMatched =
+                category.depth > 0
+                    ? ancestorMatched[category.depth - 1]
+                    : false;
+            const isShown =
+                parentMatched || category.name.toLowerCase().includes(query);
 
             ancestorMatched[category.depth] = isShown;
 
@@ -107,7 +122,9 @@ export default function AssetCategorylistIndex({ categories, canManage }: Props)
     }, [sorted, search]);
 
     const filteredIds = filtered.map((category) => category.id);
-    const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selected.includes(id));
+    const allSelected =
+        filteredIds.length > 0 &&
+        filteredIds.every((id) => selected.includes(id));
 
     function toggleSort() {
         setSortDir((current) => (current === 'asc' ? 'desc' : 'asc'));
@@ -124,6 +141,34 @@ export default function AssetCategorylistIndex({ categories, canManage }: Props)
                 : [...current, id],
         );
     }
+
+    useEffect(() => {
+        function handleEscape(event: KeyboardEvent) {
+            if (event.key !== 'Escape' || selected.length === 0) {
+                return;
+            }
+
+            const target = event.target as HTMLElement | null;
+
+            if (
+                target?.closest(
+                    'input, textarea, select, [contenteditable="true"]',
+                )
+            ) {
+                return;
+            }
+
+            if (document.querySelector('[role="dialog"][data-state="open"]')) {
+                return;
+            }
+
+            setSelected([]);
+        }
+
+        window.addEventListener('keydown', handleEscape);
+
+        return () => window.removeEventListener('keydown', handleEscape);
+    }, [selected.length]);
 
     return (
         <>
@@ -143,12 +188,20 @@ export default function AssetCategorylistIndex({ categories, canManage }: Props)
                     <div className="flex items-center gap-4">
                         {canManage && selected.length > 0 ? (
                             <>
-                                <span className="text-sm text-muted-foreground">
-                                    <span className="font-medium text-foreground">
-                                        {selected.length}
-                                    </span>{' '}
-                                    selected
-                                </span>
+                                <Badge className="bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300">
+                                    {selected.length} selected
+                                </Badge>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    data-tooltip="Clear selection"
+                                    aria-label="Clear selection"
+                                    onClick={() => setSelected([])}
+                                >
+                                    <X className="size-4" />
+                                    Clear
+                                </Button>
                                 <BulkDeleteDialog
                                     categories={categories}
                                     selected={selected}
@@ -165,7 +218,9 @@ export default function AssetCategorylistIndex({ categories, canManage }: Props)
                                     of {categories.length} categories
                                 </span>
                                 {canManage && (
-                                    <CreateCategoryDialog categories={categories} />
+                                    <CreateCategoryDialog
+                                        categories={categories}
+                                    />
                                 )}
                             </>
                         )}
@@ -177,7 +232,7 @@ export default function AssetCategorylistIndex({ categories, canManage }: Props)
                         <thead>
                             <tr className="border-b border-sidebar-border/70 text-muted-foreground">
                                 {canManage && (
-                                    <th className="w-45 py-3 align-middle">
+                                    <th className="w-12 py-3 align-middle">
                                         <div className="flex h-full items-center justify-center">
                                             <Checkbox
                                                 checked={allSelected}
@@ -188,11 +243,17 @@ export default function AssetCategorylistIndex({ categories, canManage }: Props)
                                         </div>
                                     </th>
                                 )}
-                                <th className="px-4 py-3 text-center font-medium">Kategori</th>
+                                <th className="px-4 py-3 text-center font-medium">
+                                    Kategori
+                                </th>
                                 <th
                                     className="cursor-pointer px-4 py-3 text-center font-medium select-none hover:text-foreground"
                                     onClick={toggleSort}
-                                    title={sortDir === 'asc' ? 'Urutkan dari terbanyak' : 'Urutkan dari tersedikit'}
+                                    title={
+                                        sortDir === 'asc'
+                                            ? 'Urutkan dari terbanyak'
+                                            : 'Urutkan dari tersedikit'
+                                    }
                                 >
                                     <span className="inline-flex items-center gap-1">
                                         Jumlah Aset
@@ -204,7 +265,9 @@ export default function AssetCategorylistIndex({ categories, canManage }: Props)
                                     </span>
                                 </th>
                                 {canManage && (
-                                    <th className="px-4 py-3 text-center font-medium">Aksi</th>
+                                    <th className="px-4 py-3 text-center font-medium">
+                                        Aksi
+                                    </th>
                                 )}
                             </tr>
                         </thead>
@@ -224,14 +287,44 @@ export default function AssetCategorylistIndex({ categories, canManage }: Props)
                                 filtered.map((category) => (
                                     <tr
                                         key={category.id}
-                                        className="border-b border-sidebar-border/50 last:border-b-0"
+                                        onClick={(event) => {
+                                            if (!canManage) {
+                                                return;
+                                            }
+
+                                            const target =
+                                                event.target as HTMLElement;
+
+                                            if (
+                                                target.closest(
+                                                    'input, textarea, select, button, a',
+                                                )
+                                            ) {
+                                                return;
+                                            }
+
+                                            toggleOne(category.id);
+                                        }}
+                                        className={`border-b border-sidebar-border/50 last:border-b-0 ${
+                                            canManage ? 'cursor-pointer' : ''
+                                        } ${
+                                            selected.includes(category.id)
+                                                ? 'bg-primary/10 hover:bg-primary/15'
+                                                : 'hover:bg-muted/40'
+                                        }`}
                                     >
                                         {canManage && (
                                             <td className="px-2 py-3 align-middle">
                                                 <div className="flex h-full items-center justify-center">
                                                     <Checkbox
-                                                        checked={selected.includes(category.id)}
-                                                        onCheckedChange={() => toggleOne(category.id)}
+                                                        checked={selected.includes(
+                                                            category.id,
+                                                        )}
+                                                        onCheckedChange={() =>
+                                                            toggleOne(
+                                                                category.id,
+                                                            )
+                                                        }
                                                         aria-label={`Select ${category.name}`}
                                                         className="border-muted-foreground/60"
                                                     />
@@ -239,31 +332,34 @@ export default function AssetCategorylistIndex({ categories, canManage }: Props)
                                             </td>
                                         )}
                                         <td
-                                            className={`px-4 py-3 text-center ${
+                                            className={`px-4 py-3 text-center whitespace-nowrap ${
                                                 category.depth === 0
                                                     ? 'font-semibold'
                                                     : 'font-normal text-muted-foreground'
                                             }`}
                                         >
-                                            <span
-                                                className="inline-flex items-center gap-2"
+                                            <div
+                                                className="mx-auto flex w-full max-w-[160px] items-center gap-2 text-left"
                                                 style={{
-                                                    paddingLeft: `${category.depth * 1.5}rem`,
+                                                    paddingLeft: `calc(${category.depth * 1.5}rem + 2rem)`,
                                                 }}
                                             >
                                                 {category.depth > 0 && (
                                                     <span>└─</span>
                                                 )}
-                                                {category.name}
+                                                <span>{category.name}</span>
                                                 {category.depth === 0 && (
                                                     <Badge variant="outline">
                                                         Root
                                                     </Badge>
                                                 )}
-                                            </span>
+                                            </div>
                                         </td>
                                         <td className="px-4 py-3 text-center">
-                                            <Badge variant="secondary">
+                                            <Badge
+                                                variant="secondary"
+                                                className="tabular-nums"
+                                            >
                                                 {category.assets_count} aset
                                             </Badge>
                                         </td>
@@ -274,8 +370,12 @@ export default function AssetCategorylistIndex({ categories, canManage }: Props)
                                                         categories={categories}
                                                         parent={category}
                                                     />
-                                                    <EditCategoryDialog category={category} />
-                                                    <DeleteCategoryDialog category={category} />
+                                                    <EditCategoryDialog
+                                                        category={category}
+                                                    />
+                                                    <DeleteCategoryDialog
+                                                        category={category}
+                                                    />
                                                 </div>
                                             </td>
                                         )}
@@ -337,7 +437,10 @@ function ParentField({
     excludeId?: number;
 }) {
     return (
-        <Select name="parent_id" defaultValue={parentId === null ? '' : String(parentId)}>
+        <Select
+            name="parent_id"
+            defaultValue={parentId === null ? '' : String(parentId)}
+        >
             <SelectTrigger id="parent_id" className="mt-1 w-full">
                 <SelectValue placeholder="None (kategori utama)" />
             </SelectTrigger>
@@ -346,7 +449,10 @@ function ParentField({
                 {categories
                     .filter((category) => category.id !== excludeId)
                     .map((category) => (
-                        <SelectItem key={category.id} value={String(category.id)}>
+                        <SelectItem
+                            key={category.id}
+                            value={String(category.id)}
+                        >
                             {'— '.repeat(category.depth)}
                             {category.name}
                         </SelectItem>
@@ -385,7 +491,11 @@ function CreateCategoryDialog({
                 )}
             </DialogTrigger>
             <DialogContent>
-                <DialogTitle>{isChild ? `Tambah sub-kategori "${parent.name}"` : 'Tambah kategori'}</DialogTitle>
+                <DialogTitle>
+                    {isChild
+                        ? `Tambah sub-kategori "${parent.name}"`
+                        : 'Tambah kategori'}
+                </DialogTitle>
                 <DialogDescription>
                     {isChild
                         ? 'Sub-kategori baru akan ditempatkan di bawah kategori ini.'
@@ -404,7 +514,9 @@ function CreateCategoryDialog({
                     {({ errors, processing }) => (
                         <>
                             <div className="grid gap-2">
-                                <Label htmlFor="parent_id">Parent kategori</Label>
+                                <Label htmlFor="parent_id">
+                                    Parent kategori
+                                </Label>
                                 <ParentField
                                     categories={categories}
                                     parentId={isChild ? parent.id : null}
@@ -413,7 +525,9 @@ function CreateCategoryDialog({
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="create-name">Nama kategori</Label>
+                                <Label htmlFor="create-name">
+                                    Nama kategori
+                                </Label>
                                 <Input
                                     id="create-name"
                                     name="name"
@@ -453,7 +567,9 @@ function EditCategoryDialog({ category }: { category: CategoryRow }) {
             </DialogTrigger>
             <DialogContent>
                 <DialogTitle>Edit kategori</DialogTitle>
-                <DialogDescription>Update the name for {category.name}.</DialogDescription>
+                <DialogDescription>
+                    Update the name for {category.name}.
+                </DialogDescription>
 
                 <Form
                     {...AssetCategoryController.update.form(category.id)}
@@ -467,7 +583,9 @@ function EditCategoryDialog({ category }: { category: CategoryRow }) {
                     {({ errors, processing }) => (
                         <>
                             <div className="grid gap-2">
-                                <Label htmlFor={`name-${category.id}`}>Nama kategori</Label>
+                                <Label htmlFor={`name-${category.id}`}>
+                                    Nama kategori
+                                </Label>
                                 <Input
                                     id={`name-${category.id}`}
                                     name="name"
@@ -515,13 +633,15 @@ function BulkDeleteDialog({
             <DialogTrigger asChild>
                 <Button variant="destructive" size="sm">
                     <Trash2 className="size-4" />
-                    Hapus Terpilih
+                    Delete Selected
                 </Button>
             </DialogTrigger>
             <DialogContent>
                 <DialogTitle>Delete kategori terpilih</DialogTitle>
                 <DialogDescription>
-                    Are you sure you want to delete {selected.length} selected categories? Categories with sub-categories or assets will be skipped.
+                    Are you sure you want to delete {selected.length} selected
+                    categories? Categories with sub-categories or assets will be
+                    skipped.
                 </DialogDescription>
 
                 <ul className="max-h-48 overflow-y-auto rounded-md border border-sidebar-border/70 text-sm">
@@ -547,14 +667,23 @@ function BulkDeleteDialog({
                     {({ processing }) => (
                         <>
                             {selected.map((id) => (
-                                <input key={id} type="hidden" name="ids[]" value={id} />
+                                <input
+                                    key={id}
+                                    type="hidden"
+                                    name="ids[]"
+                                    value={id}
+                                />
                             ))}
 
                             <DialogFooter className="gap-2">
                                 <DialogClose asChild>
                                     <Button variant="secondary">Cancel</Button>
                                 </DialogClose>
-                                <Button type="submit" variant="destructive" disabled={processing}>
+                                <Button
+                                    type="submit"
+                                    variant="destructive"
+                                    disabled={processing}
+                                >
                                     Delete
                                 </Button>
                             </DialogFooter>
@@ -580,7 +709,8 @@ function DeleteCategoryDialog({ category }: { category: CategoryRow }) {
             <DialogContent>
                 <DialogTitle>Delete kategori</DialogTitle>
                 <DialogDescription>
-                    Are you sure you want to delete {category.name}? Categories with sub-categories or assets cannot be deleted.
+                    Are you sure you want to delete {category.name}? Categories
+                    with sub-categories or assets cannot be deleted.
                 </DialogDescription>
 
                 <Form
@@ -596,7 +726,11 @@ function DeleteCategoryDialog({ category }: { category: CategoryRow }) {
                             <DialogClose asChild>
                                 <Button variant="secondary">Cancel</Button>
                             </DialogClose>
-                            <Button type="submit" variant="destructive" disabled={processing}>
+                            <Button
+                                type="submit"
+                                variant="destructive"
+                                disabled={processing}
+                            >
                                 Delete
                             </Button>
                         </DialogFooter>
@@ -612,8 +746,7 @@ AssetCategorylistIndex.layout = (props: {
     menu?: { name: string; url: string };
     activeChild?: { name: string; url: string };
 }) => ({
-    breadcrumbs:
-        showChildCrumbs(props) ??
+    breadcrumbs: showChildCrumbs(props) ??
         menuBreadcrumbs(props.menus, AssetCategoryController.index.url()) ?? [
             { title: 'Category List', href: assetsOverview() },
         ],

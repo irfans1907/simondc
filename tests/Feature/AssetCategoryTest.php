@@ -96,6 +96,52 @@ test('the category page lists categories as a flat tree with counts', function (
         );
 });
 
+test('the category page counts grouped devices once', function () {
+    $superadmin = superadminUser();
+    $superadmin->givePermissionTo('manage asset management');
+
+    $ups = Category::factory()->create(['name' => 'UPS', 'parent_id' => null]);
+    $frame = Category::factory()->create(['name' => 'Frame', 'parent_id' => $ups->id]);
+    $module = Category::factory()->create(['name' => 'Modul', 'parent_id' => $frame->id]);
+    $battery = Category::factory()->create(['name' => 'Battery', 'parent_id' => $ups->id]);
+
+    // Three UPS-2 records and one UPS-A record per component type all belong
+    // to two physical UPS units.
+    foreach ([$module, $module, $module, $battery, $battery] as $category) {
+        Asset::factory()->create(['category_id' => $category->id, 'name' => 'UPS-2']);
+    }
+
+    Asset::factory()->create(['category_id' => $module->id, 'name' => 'UPS-A']);
+    Asset::factory()->create(['category_id' => $battery->id, 'name' => 'UPS-A']);
+
+    // Two camera channels on each of two DVR devices.
+    $dvr = Category::factory()->create(['name' => 'DVR', 'parent_id' => null]);
+
+    foreach (['CCTV-1', 'CCTV-1', 'CCTV-2', 'CCTV-2'] as $name) {
+        Asset::factory()->create(['category_id' => $dvr->id, 'name' => $name]);
+    }
+
+    // A category outside the grouped sheets still counts every record.
+    $server = Category::factory()->create(['name' => 'Server', 'parent_id' => null]);
+    Asset::factory()->count(2)->create(['category_id' => $server->id, 'name' => 'Server-1']);
+
+    $this->actingAs($superadmin);
+
+    $this->get(route('asset-categories.index'))
+        ->assertOk()
+        ->assertInertia(function ($page) {
+            $counts = collect($page->toArray()['props']['categories'])
+                ->pluck('assets_count', 'name');
+
+            expect($counts['UPS'])->toBe(2)
+                ->and($counts['Frame'])->toBe(2)
+                ->and($counts['Modul'])->toBe(2)
+                ->and($counts['Battery'])->toBe(2)
+                ->and($counts['DVR'])->toBe(2)
+                ->and($counts['Server'])->toBe(2);
+        });
+});
+
 test('a root category can be created', function () {
     $superadmin = superadminUser();
 

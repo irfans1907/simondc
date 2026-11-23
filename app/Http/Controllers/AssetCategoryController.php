@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Events\AssetsChanged;
+use App\Helpers\AssetSheetHelper;
+use App\Models\Asset;
 use App\Models\Category;
 use App\Models\Menu;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -196,25 +199,45 @@ class AssetCategoryController extends Controller
             ->get(['id', 'name', 'parent_id'])
             ->keyBy('id');
 
-        $ownAssetsCount = Category::query()
-            ->withCount('assets')
-            ->get()
-            ->pluck('assets_count', 'id');
+        // Count one row per device, not per stored record: UPS records that
+        // share a name and the camera channels of one CCTV device form a
+        // single row in Asset Settings, so the category count follows the
+        // same grouping.
+        $upsCategoryIds = AssetSheetHelper::categoryIds('ups-batt');
+        $cctvCategoryIds = AssetSheetHelper::categoryIds('cctv');
+        $cameraCategoryIds = AssetSheetHelper::cctvCameraCategoryIds();
 
-        $descendantCount = [];
+        $deviceKeys = Asset::query()
+            ->get(['id', 'name', 'category_id'])
+            ->groupBy('category_id')
+            ->map(fn (Collection $assets): array => $assets
+                ->map(fn (Asset $asset): string => AssetSheetHelper::deviceGroupKey(
+                    $asset,
+                    $upsCategoryIds,
+                    $cctvCategoryIds,
+                    $cameraCategoryIds,
+                ))
+                ->unique()
+                ->values()
+                ->all());
 
-        $countDescendants = function (int $categoryId) use (&$countDescendants, $all, $ownAssetsCount, &$descendantCount): int {
-            if (isset($descendantCount[$categoryId])) {
-                return $descendantCount[$categoryId];
+        $descendantKeys = [];
+
+        $countDescendants = function (int $categoryId) use (&$countDescendants, $all, $deviceKeys, &$descendantKeys): int {
+            if (isset($descendantKeys[$categoryId])) {
+                return count($descendantKeys[$categoryId]);
             }
 
-            $total = $ownAssetsCount[$categoryId] ?? 0;
+            $keys = $deviceKeys[$categoryId] ?? [];
 
             foreach ($all->where('parent_id', $categoryId) as $child) {
-                $total += $countDescendants($child->id);
+                $countDescendants($child->id);
+                $keys = [...$keys, ...($descendantKeys[$child->id] ?? [])];
             }
 
-            return $descendantCount[$categoryId] = $total;
+            $descendantKeys[$categoryId] = array_values(array_unique($keys));
+
+            return count($descendantKeys[$categoryId]);
         };
 
         $rows = [];

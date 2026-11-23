@@ -3,6 +3,7 @@
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\AssetCategoryController;
 use App\Http\Controllers\AssetController;
+use App\Http\Controllers\AssetListController;
 use App\Http\Controllers\AssetScanController;
 use App\Http\Controllers\AssetSettingsController;
 use App\Http\Controllers\ChecklistController;
@@ -143,12 +144,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // QR scan pages: login only, no asset permission (Fase 2 decision).
     Route::get('assets/scan', [AssetScanController::class, 'index'])
         ->name('assets.scan');
+    Route::get('assets/scan/group', [AssetScanController::class, 'group'])
+        ->name('assets.scan.group');
     Route::get('assets/{asset}/scan', [AssetScanController::class, 'show'])
         ->name('assets.scan.show');
 
     Route::middleware('permission:manage-asset-management')->group(function () {
         Route::get('assets/export', [AssetController::class, 'export'])->name('assets.export');
         Route::post('assets', [AssetController::class, 'store'])->name('assets.store');
+        Route::post('assets/bulk', [AssetController::class, 'storeBulk'])->name('assets.store-bulk');
         Route::patch('assets/{asset}', [AssetController::class, 'update'])->name('assets.update');
         Route::delete('assets/{asset}', [AssetController::class, 'destroy'])->name('assets.destroy');
     });
@@ -158,6 +162,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('assets.index');
         Route::get('assets/overview', [AssetController::class, 'overview'])
             ->name('assets.overview');
+        Route::get('assets/list', [AssetListController::class, 'index'])
+            ->name('assets.list');
         Route::get('assets/categorylist', [AssetCategoryController::class, 'index'])
             ->name('asset-categories.index');
         Route::get('assets/panelpowerlist', [PanelPowerController::class, 'index'])
@@ -205,6 +211,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('assets.troubleshoot.update');
         Route::delete('assets/troubleshoot/{troubleshoot}', [TroubleshootController::class, 'destroy'])
             ->name('assets.troubleshoot.destroy');
+        Route::patch('assets/settings/bulk', [AssetSettingsController::class, 'bulkUpdate'])
+            ->name('assets.settings.bulk');
         Route::patch('assets/settings/{asset}', [AssetSettingsController::class, 'update'])
             ->name('assets.settings.update');
     });
@@ -256,6 +264,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('checklist.dailycheck');
         Route::get('checklist/monthlycheck', [MonthlyCheckController::class, 'index'])
             ->name('checklist.monthlycheck');
+        Route::get('checklist/export', [ChecklistController::class, 'export'])
+            ->name('checklist.export');
     });
 
     Route::middleware('permission:manage-checklist')->group(function () {

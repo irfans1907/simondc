@@ -7,6 +7,7 @@ use Database\Factories\CategoryFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
@@ -27,6 +28,7 @@ class Category extends Model
      * @var list<string>
      */
     public const DEFAULTS = [
+        'UPS',
         'UPS Frame',
         'UPS Modul',
         'UPS Electronic',
@@ -55,6 +57,7 @@ class Category extends Model
         'Rectifire',
         'PC',
         'Server',
+        'Rack',
     ];
 
     public function parent(): BelongsTo
@@ -67,9 +70,57 @@ class Category extends Model
         return $this->hasMany(Category::class, 'parent_id');
     }
 
+    /**
+     * The top-level category this category belongs to. Checklist templates
+     * are always resolved from this root, so a sub-category such as
+     * "Modul 1" (under "UPS Frame", under "UPS") uses the "UPS" template.
+     */
+    public function root(): self
+    {
+        $category = $this;
+
+        while ($category->parent_id !== null) {
+            $parent = $category->parent;
+
+            if ($parent === null) {
+                break;
+            }
+
+            $category = $parent;
+        }
+
+        return $category;
+    }
+
     public function assets(): HasMany
     {
         return $this->hasMany(Asset::class);
+    }
+
+    /**
+     * The checklist categories this asset category feeds. PAC and AC, for
+     * example, both feed the "PAC & AC" checklist category.
+     *
+     * @return BelongsToMany<ChecklistCategory, $this>
+     */
+    public function checklistCategories(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            ChecklistCategory::class,
+            'checklist_category_asset_category',
+            'category_id',
+            'checklist_category_id',
+        )->withTimestamps();
+    }
+
+    /**
+     * The checklist item templates defined for this asset category.
+     *
+     * @return HasMany<ChecklistItemTemplate, $this>
+     */
+    public function checklistItemTemplates(): HasMany
+    {
+        return $this->hasMany(ChecklistItemTemplate::class);
     }
 
     /**

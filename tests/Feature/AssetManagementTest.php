@@ -66,7 +66,7 @@ test('a user with the manage asset management permission can access the page', f
         ->assertInertia(fn ($page) => $page->where('canManage', true));
 });
 
-test('the asset management page lists assets with their category path', function () {
+test('the asset overview page renders empty summary cards', function () {
     $superadmin = superadminUser();
     Asset::factory()->count(3)->create();
 
@@ -76,14 +76,14 @@ test('the asset management page lists assets with their category path', function
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->component('dynamic/assets/overview', false)
-            ->has('assets.data', 3)
-            ->has('assets.data.0.category_path', 1)
-            ->has('categories', 3)
-            ->where('categories.0.children', [])
+            ->where('summary.total_assets', null)
+            ->where('summary.total_categories', null)
+            ->where('summary.total_maintenances', null)
+            ->where('summary.total_troubleshoots', null)
         );
 });
 
-test('the overview child page renders the asset list at /assets/overview', function () {
+test('the overview child page renders the summary at /assets/overview', function () {
     $superadmin = superadminUser();
     Asset::factory()->count(2)->create();
 
@@ -111,8 +111,7 @@ test('the overview child page renders the asset list at /assets/overview', funct
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->component('dynamic/assets/overview', false)
-            ->has('assets.data', 2)
-            ->where('filters.search_column', 'all')
+            ->where('summary.total_assets', null)
             ->has('menu')
             ->has('activeChild')
             ->where('menu.url', '/assets')
@@ -128,13 +127,11 @@ test('assets can be searched by name', function () {
 
     $this->actingAs($superadmin);
 
-    $this->get(route('assets.overview', ['search' => 'UPS']))
-        ->assertOk()
-        ->assertInertia(fn ($page) => $page
-            ->has('assets.data', 1)
-            ->where('assets.data.0.name', 'UPS Utama')
-            ->where('filters.search', 'UPS')
-        );
+    $csv = $this->get(route('assets.export', ['search' => 'UPS']))
+        ->streamedContent();
+
+    expect($csv)->toContain('UPS Utama')
+        ->not->toContain('Kamera Lobby');
 });
 
 test('assets can be searched by serial number', function () {
@@ -144,27 +141,26 @@ test('assets can be searched by serial number', function () {
 
     $this->actingAs($superadmin);
 
-    $this->get(route('assets.overview', ['search' => 'SN-BBB']))
-        ->assertOk()
-        ->assertInertia(fn ($page) => $page
-            ->has('assets.data', 1)
-            ->where('assets.data.0.name', 'Kamera Lobby')
-        );
+    $csv = $this->get(route('assets.export', ['search' => 'SN-BBB']))
+        ->streamedContent();
+
+    expect($csv)->toContain('Kamera Lobby')
+        ->not->toContain('UPS Utama');
 });
 
-test('assets are paginated', function () {
+test('the export includes every asset', function () {
     $superadmin = superadminUser();
-    Asset::factory()->count(15)->create();
+    $names = collect(range(1, 15))->map(fn (int $number): string => sprintf('Aset %02d', $number));
+
+    $names->each(fn (string $name) => Asset::factory()->create(['name' => $name]));
 
     $this->actingAs($superadmin);
 
-    $this->get(route('assets.overview'))
-        ->assertOk()
-        ->assertInertia(fn ($page) => $page
-            ->has('assets.data', 10)
-            ->where('assets.last_page', 2)
-            ->where('assets.total', 15)
-        );
+    $csv = $this->get(route('assets.export'))->streamedContent();
+
+    foreach ($names as $name) {
+        expect($csv)->toContain($name);
+    }
 });
 
 test('an asset can be created with a root category only', function () {
@@ -174,7 +170,7 @@ test('an asset can be created with a root category only', function () {
     $this->actingAs($superadmin);
 
     $this->post(route('assets.store'), $payload)
-        ->assertRedirect(route('assets.index'));
+        ->assertRedirect(route('assets.list'));
 
     $category = Category::whereNull('parent_id')->where('name', 'Server')->first();
 
@@ -196,7 +192,7 @@ test('creating an asset with a new subcategory nests it under the category', fun
     $this->actingAs($superadmin);
 
     $this->post(route('assets.store'), $payload)
-        ->assertRedirect(route('assets.index'));
+        ->assertRedirect(route('assets.list'));
 
     $root = Category::whereNull('parent_id')->where('name', 'UPS FRAME 1')->first();
     $child = Category::where('parent_id', $root->id)->where('name', 'Modul Eksternal')->first();
@@ -213,13 +209,14 @@ test('creating an asset with a new subcategory nests it under the category', fun
 test('creating an asset with a full four-level path creates the chain', function () {
     $superadmin = superadminUser();
     $payload = assetPayload([
+        'sheet' => 'ups-batt',
         'category_path' => ['UPS', 'UPS Frame', 'Modul 1', 'Spare Part'],
     ]);
 
     $this->actingAs($superadmin);
 
     $this->post(route('assets.store'), $payload)
-        ->assertRedirect(route('assets.index'));
+        ->assertRedirect(route('assets.list', ['sheet' => 'ups-batt']));
 
     $root = Category::whereNull('parent_id')->where('name', 'UPS')->first();
     $level2 = Category::where('parent_id', $root->id)->where('name', 'UPS Frame')->first();
@@ -235,12 +232,6 @@ test('creating an asset with a full four-level path creates the chain', function
         'name' => $payload['name'],
         'category_id' => $level4->id,
     ]);
-
-    $this->get(route('assets.overview'))
-        ->assertOk()
-        ->assertInertia(fn ($page) => $page
-            ->where('assets.data.0.category_path', ['UPS', 'UPS Frame', 'Modul 1', 'Spare Part'])
-        );
 });
 
 test('category path names are matched case-insensitively within their scope', function () {
@@ -254,7 +245,7 @@ test('category path names are matched case-insensitively within their scope', fu
     $this->actingAs($superadmin);
 
     $this->post(route('assets.store'), $payload)
-        ->assertRedirect(route('assets.index'));
+        ->assertRedirect(route('assets.list'));
 
     $this->assertDatabaseCount('categories', 2);
 
@@ -264,28 +255,27 @@ test('category path names are matched case-insensitively within their scope', fu
     ]);
 });
 
-test('creating an asset requires the mandatory fields', function () {
+test('creating an asset only requires a name and category', function () {
     $superadmin = superadminUser();
 
     $this->actingAs($superadmin);
 
     $this->post(route('assets.store'), [])
-        ->assertSessionHasErrors([
-            'name',
-            'category_path',
-            'brand',
-            'type',
-            'model',
-            'serial_number',
-            'capacity',
-            'manufacture_year',
-            'operation_year',
-            'quantity',
-            'floor',
-            'room',
-        ]);
+        ->assertSessionHasErrors(['name', 'category_path']);
 
     $this->assertDatabaseCount('assets', 0);
+
+    $this->post(route('assets.store'), [
+        'name' => 'Aset Minimal',
+        'category_path' => ['Server'],
+    ])->assertRedirect(route('assets.list'));
+
+    $this->assertDatabaseHas('assets', [
+        'name' => 'Aset Minimal',
+        'brand' => null,
+        'serial_number' => null,
+        'room' => null,
+    ]);
 });
 
 test('an asset can be updated with a deeper category path', function () {
@@ -298,7 +288,7 @@ test('an asset can be updated with a deeper category path', function () {
         'name' => 'Updated Asset Name',
         'category_path' => ['Genset', 'Silent', 'Panel ATS'],
     ]))
-        ->assertRedirect(route('assets.index'));
+        ->assertRedirect(route('assets.list'));
 
     $root = Category::whereNull('parent_id')->where('name', 'Genset')->first();
     $level2 = Category::where('parent_id', $root->id)->where('name', 'Silent')->first();
@@ -322,7 +312,7 @@ test('updating an asset with a shorter path moves it back up the tree', function
     $this->patch(route('assets.update', $asset), assetPayload([
         'category_path' => ['Server'],
     ]))
-        ->assertRedirect(route('assets.index'));
+        ->assertRedirect(route('assets.list'));
 
     $this->assertDatabaseHas('assets', [
         'id' => $asset->id,
@@ -337,7 +327,7 @@ test('an asset can be deleted', function () {
     $this->actingAs($superadmin);
 
     $this->delete(route('assets.destroy', $asset))
-        ->assertRedirect(route('assets.index'));
+        ->assertRedirect(route('assets.list'));
 
     $this->assertDatabaseMissing('assets', ['id' => $asset->id]);
 });
@@ -363,16 +353,34 @@ test('the export returns a csv download of all assets', function () {
     $response = $this->get(route('assets.export'));
 
     $response->assertOk()
-        ->assertDownload('assets-'.now()->format('Y-m-d').'.csv');
+        ->assertDownload('assets-general-'.now()->format('Y-m-d').'.csv');
 
     $csv = $response->streamedContent();
 
-    expect($csv)->toContain('No,"Nama Perangkat"')
+    expect($csv)->toContain('"Nama Perangkat",Kategori,QTY,Alias')
         ->toContain('Serial Number')
-        ->toContain('Catatan');
+        ->toContain('Keterangan');
 });
 
-test('the csv export numbers rows sequentially', function () {
+test('the csv export includes the generated keterangan', function () {
+    $superadmin = superadminUser();
+    $ups = Category::create(['parent_id' => null, 'name' => 'UPS']);
+    $frame = Category::create(['parent_id' => $ups->id, 'name' => 'UPS Frame']);
+
+    Asset::factory()->create([
+        'category_id' => $frame->id,
+        'name' => 'UPS Export',
+    ]);
+
+    $this->actingAs($superadmin);
+
+    $csv = $this->get(route('assets.export', ['sheet' => 'ups-batt']))
+        ->streamedContent();
+
+    expect($csv)->toContain("UPS Export\nUPS\nUPS Frame");
+});
+
+test('the csv export lists every asset in order', function () {
     $superadmin = superadminUser();
     Asset::factory()->create(['name' => 'AAA Zzz']);
     Asset::factory()->create(['name' => 'BBB Zzz']);
@@ -381,8 +389,12 @@ test('the csv export numbers rows sequentially', function () {
 
     $csv = $this->get(route('assets.export'))->streamedContent();
 
-    expect($csv)->toContain("\n1,\"AAA Zzz\"")
-        ->toContain("\n2,\"BBB Zzz\"");
+    $positionA = strpos($csv, '"AAA Zzz"');
+    $positionB = strpos($csv, '"BBB Zzz"');
+
+    expect($positionA)->not->toBeFalse()
+        ->and($positionB)->not->toBeFalse()
+        ->and($positionB)->toBeGreaterThan($positionA);
 });
 
 test('the export honors the search filter', function () {
@@ -443,12 +455,12 @@ test('an unknown search column falls back to searching all columns', function ()
 
     $this->actingAs($superadmin);
 
-    $this->get(route('assets.overview', ['search' => 'UPS', 'search_column' => 'DROP TABLE']))
-        ->assertOk()
-        ->assertInertia(fn ($page) => $page
-            ->where('filters.search_column', 'all')
-            ->has('assets.data', 1)
-        );
+    $csv = $this->get(route('assets.export', [
+        'search' => 'UPS',
+        'search_column' => 'DROP TABLE',
+    ]))->streamedContent();
+
+    expect($csv)->toContain('UPS Utama');
 });
 
 test('searching by description matches the name or any category in the path', function () {

@@ -1,6 +1,5 @@
 import { Head, Link } from '@inertiajs/react';
 import { ScanLine } from 'lucide-react';
-import { useState } from 'react';
 import Heading from '@/components/heading';
 import {
     CreateMaintenanceDialog,
@@ -19,10 +18,13 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import type { MenuRow } from '@/lib/menu-breadcrumbs';
+import ChecklistCard from './checklist-card';
+import type { ScanChecklist } from './checklist-card';
 
 type ScannedAsset = {
     id: number;
     name: string;
+    display_name: string;
     category: string | null;
     brand: string;
     type: string;
@@ -46,6 +48,16 @@ type MaintenanceRow = {
     result: string;
 };
 
+type ScanMember = {
+    id: number;
+    name: string;
+    category: string | null;
+    brand: string;
+    model: string;
+    serial_number: string;
+    identity: { label: string; value: string }[];
+};
+
 const infoFields = [
     { label: 'Merek', key: 'brand' },
     { label: 'Model', key: 'model' },
@@ -59,58 +71,69 @@ const infoFields = [
 ] as const;
 
 /**
- * Placeholder checklist shown until the real item list is configured —
- * ticking boxes only holds local state for this visit.
+ * Compact one-line summary of a member's sheet-specific identity, falling
+ * back to the generic model and serial number when the sheet has none.
  */
-const placeholderChecklist = [
-    'Kondisi fisik casing baik, tidak penyok atau retak',
-    'Kabel terpasang rapi dan terlabel',
-    'Label identitas perangkat lengkap dan terbaca',
-    'Tidak ada tanda panas atau bekas korsleting',
-    'Bersih dari debu dan sirkulasi udara lancar',
-    'Dokumentasi pemutakhiran terbaru tersedia',
-];
+function memberDetail(member: ScanMember): string {
+    if (member.identity.length > 0) {
+        return member.identity
+            .map((field) => `${field.label} ${field.value}`)
+            .join(' - ');
+    }
+
+    return [member.model, member.serial_number].filter(Boolean).join(' - ');
+}
+
+/**
+ * Reset the checklist card when the scanned asset or its saved entries
+ * change, without an effect that writes state after render.
+ */
+function checklistStateKey(
+    checklist: ScanChecklist | null,
+    assetId: number,
+): string {
+    if (!checklist) {
+        return `${assetId}:none`;
+    }
+
+    const entries = checklist.entries
+        .map(
+            (entry) =>
+                `${entry.item_id}@${entry.time_slot}=${entry.value ?? ''}/${entry.status ?? ''}`,
+        )
+        .join(',');
+
+    return `${assetId}:${checklist.date}:${checklist.category.id ?? 0}:${entries}`;
+}
 
 export default function AssetScanShow({
     asset,
+    members,
     maintenances,
     assetOptions,
+    checklist,
     canManage,
+    canManageChecklist,
 }: {
     asset: ScannedAsset;
+    members: ScanMember[];
     maintenances: MaintenanceRow[];
     assetOptions: AssetOption[];
+    checklist: ScanChecklist | null;
     canManage: boolean;
+    canManageChecklist: boolean;
 }) {
-    const [checkedItems, setCheckedItems] = useState<Set<number>>(
-        () => new Set(),
-    );
-
-    function toggleItem(index: number): void {
-        setCheckedItems((current) => {
-            const next = new Set(current);
-
-            if (next.has(index)) {
-                next.delete(index);
-            } else {
-                next.add(index);
-            }
-
-            return next;
-        });
-    }
-
     return (
         <>
-            <Head title={`Scan — ${asset.name}`} />
+            <Head title={`Scan — ${asset.display_name}`} />
 
-            <h1 className="sr-only">Scan {asset.name}</h1>
+            <h1 className="sr-only">Scan {asset.display_name}</h1>
 
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <Heading
                         variant="default"
-                        title={asset.name}
+                        title={asset.display_name}
                         description={
                             asset.category
                                 ? `Kategori: ${asset.category}`
@@ -143,8 +166,19 @@ export default function AssetScanShow({
                                         <p className="text-xs text-muted-foreground">
                                             {field.label}
                                         </p>
-                                        <p className="text-sm font-medium">
-                                            {asset[field.key]}
+                                        <p
+                                            className={`text-sm font-medium ${
+                                                field.key === 'capacity'
+                                                    ? 'whitespace-pre-line'
+                                                    : ''
+                                            }`}
+                                        >
+                                            {field.key === 'capacity'
+                                                ? asset[field.key].replace(
+                                                      /;\s*/g,
+                                                      '\n',
+                                                  )
+                                                : asset[field.key]}
                                         </p>
                                     </div>
                                 ))}
@@ -152,31 +186,62 @@ export default function AssetScanShow({
                     </CardContent>
                 </Card>
 
-                {asset.in_checklist && (
+                {members.length > 1 && (
                     <Card>
                         <CardHeader>
-                            <CardTitle>Checklist</CardTitle>
+                            <CardTitle>Anggota Grup</CardTitle>
                             <CardDescription>
-                                Placeholder — daftar item belum dikonfigurasi.
+                                {members.length} aset tergabung dalam perangkat
+                                ini.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="flex flex-col gap-3">
-                            {placeholderChecklist.map((item, index) => (
-                                <label
-                                    key={item}
-                                    className="flex cursor-pointer items-start gap-2 text-sm"
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={checkedItems.has(index)}
-                                        onChange={() => toggleItem(index)}
-                                        className="mt-0.5 size-4 accent-green-600"
-                                    />
-                                    <span>{item}</span>
-                                </label>
-                            ))}
+                        <CardContent>
+                            <div className="overflow-x-auto rounded-xl border border-sidebar-border/70">
+                                <table className="w-full text-left text-sm">
+                                    <thead>
+                                        <tr className="border-b border-sidebar-border/70 text-muted-foreground">
+                                            <th className="px-4 py-3 font-medium">
+                                                Kategori
+                                            </th>
+                                            <th className="px-4 py-3 font-medium">
+                                                Merek
+                                            </th>
+                                            <th className="px-4 py-3 font-medium">
+                                                Detail
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {members.map((member) => (
+                                            <tr
+                                                key={member.id}
+                                                className="border-b border-sidebar-border/50 last:border-b-0"
+                                            >
+                                                <td className="px-4 py-3">
+                                                    {member.category ?? '-'}
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    {member.brand || '-'}
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    {memberDetail(member) ||
+                                                        '-'}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </CardContent>
                     </Card>
+                )}
+
+                {asset.in_checklist && (
+                    <ChecklistCard
+                        key={checklistStateKey(checklist, asset.id)}
+                        checklist={checklist}
+                        canManage={canManageChecklist}
+                    />
                 )}
 
                 {asset.in_maintenance && (
@@ -202,16 +267,16 @@ export default function AssetScanShow({
                                     <table className="w-full table-fixed text-left text-sm">
                                         <thead>
                                             <tr className="border-b border-sidebar-border/70 text-muted-foreground">
-                                                <th className="w-1/4 px-4 py-3 text-center font-medium truncate">
+                                                <th className="w-1/4 truncate px-4 py-3 text-center font-medium">
                                                     Tanggal Mulai Maintenance
                                                 </th>
-                                                <th className="w-1/4 px-4 py-3 text-center font-medium truncate">
+                                                <th className="w-1/4 truncate px-4 py-3 text-center font-medium">
                                                     Tanggal Beres Maintenance
                                                 </th>
-                                                <th className="px-4 py-3 text-center font-medium truncate">
+                                                <th className="truncate px-4 py-3 text-center font-medium">
                                                     Status
                                                 </th>
-                                                <th className="px-4 py-3 text-center font-medium truncate">
+                                                <th className="truncate px-4 py-3 text-center font-medium">
                                                     Hasil
                                                 </th>
                                             </tr>
@@ -222,12 +287,12 @@ export default function AssetScanShow({
                                                     key={maintenance.id}
                                                     className="border-b border-sidebar-border/50 last:border-b-0"
                                                 >
-                                                    <td className="px-4 py-3 text-center truncate">
+                                                    <td className="truncate px-4 py-3 text-center">
                                                         {formatDate(
                                                             maintenance.maintenance_date,
                                                         )}
                                                     </td>
-                                                    <td className="px-4 py-3 text-center truncate">
+                                                    <td className="truncate px-4 py-3 text-center">
                                                         {maintenance.end_date ? (
                                                             formatDate(
                                                                 maintenance.end_date,
@@ -238,7 +303,7 @@ export default function AssetScanShow({
                                                             </span>
                                                         )}
                                                     </td>
-                                                    <td className="px-4 py-3 text-center truncate">
+                                                    <td className="truncate px-4 py-3 text-center">
                                                         <Badge
                                                             variant="outline"
                                                             className={statusBadgeClassFor(
@@ -248,7 +313,7 @@ export default function AssetScanShow({
                                                             {maintenance.status}
                                                         </Badge>
                                                     </td>
-                                                    <td className="px-4 py-3 text-center truncate">
+                                                    <td className="truncate px-4 py-3 text-center">
                                                         {maintenance.result ? (
                                                             <Badge
                                                                 variant="outline"
@@ -278,8 +343,8 @@ export default function AssetScanShow({
 
                 {!asset.in_checklist && !asset.in_maintenance && (
                     <p className="text-sm text-muted-foreground">
-                        Section checklist dan maintenance tidak diaktifkan
-                        untuk aset ini.
+                        Section checklist dan maintenance tidak diaktifkan untuk
+                        aset ini.
                     </p>
                 )}
             </div>
@@ -289,7 +354,7 @@ export default function AssetScanShow({
 
 AssetScanShow.layout = (props: {
     menus?: MenuRow[];
-    asset?: { name: string };
+    asset?: { name: string; display_name?: string };
 }) => {
     const parent = props.menus?.find((menu) => menu.url === '/assets');
 
@@ -300,7 +365,7 @@ AssetScanShow.layout = (props: {
                 href: parent?.url ?? '/assets',
             },
             {
-                title: props.asset?.name ?? 'Aset',
+                title: props.asset?.display_name ?? props.asset?.name ?? 'Aset',
                 href: '#',
             },
         ],

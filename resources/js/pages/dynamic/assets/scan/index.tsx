@@ -10,22 +10,36 @@ import type { MenuRow } from '@/lib/menu-breadcrumbs';
 const scannerPath = AssetScanController.index.url();
 
 /**
- * Accept only this app's own scan URLs (same origin, one asset id) so a
- * random QR code can never bounce the user off-site.
+ * Accept only this app's own scan URLs (same origin): a single asset page or
+ * a grouped sticker, so a random QR code can never bounce the user off-site.
  */
+const assetScanPattern = /^\/assets\/\d+\/scan\/?$/;
+const groupScanPattern = /^\/assets\/scan\/group\/?$/;
+
 function resolveScanTarget(text: string): string | null {
-    const pattern = /^\/assets\/\d+\/scan\/?$/;
-
     try {
-        const url = new URL(text);
+        const url = new URL(text, window.location.origin);
 
-        if (url.origin === window.location.origin) {
-            return pattern.test(url.pathname) ? url.pathname : null;
+        if (url.origin !== window.location.origin) {
+            return null;
+        }
+
+        if (assetScanPattern.test(url.pathname)) {
+            return url.pathname;
+        }
+
+        // Grouped stickers need their name query kept so the scan page can
+        // look up every member of the group.
+        if (
+            groupScanPattern.test(url.pathname) &&
+            url.searchParams.get('name')?.trim()
+        ) {
+            return `${url.pathname}${url.search}`;
         }
 
         return null;
     } catch {
-        return pattern.test(text) ? text : null;
+        return null;
     }
 }
 
