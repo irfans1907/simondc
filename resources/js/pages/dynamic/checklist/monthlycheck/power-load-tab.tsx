@@ -10,6 +10,7 @@ type Props = {
     floor: number;
     year: number;
     pdus: PowerPdu[];
+    periodLabel: string;
     canManage: boolean;
 };
 
@@ -40,6 +41,7 @@ export default function PowerLoadTab({
     floor,
     year,
     pdus,
+    periodLabel,
     canManage,
 }: Props) {
     const [selectedPduId, setSelectedPduId] = useState<string | null>(
@@ -65,12 +67,27 @@ export default function PowerLoadTab({
         );
     };
 
+    const rowTotal = (rowId: number): number => {
+        let total = 0;
+
+        for (let month = 1; month <= 12; month++) {
+            const raw = cellValue(rowId, month);
+            const value = raw === '' ? 0 : Number(raw);
+
+            if (!Number.isNaN(value)) {
+                total += value;
+            }
+        }
+
+        return total;
+    };
+
     const handleCellChange = (rowId: number, month: number, value: string) => {
         setEdits((prev) => ({ ...prev, [`${rowId}-${month}`]: value }));
     };
 
     const handleSavePdu = async () => {
-        if (! pdu || ! canManage) {
+        if (!pdu || !canManage) {
             return;
         }
 
@@ -98,7 +115,7 @@ export default function PowerLoadTab({
         });
     };
 
-    if (! pdu) {
+    if (!pdu) {
         return (
             <div className="rounded-xl border border-dashed border-sidebar-border/70 p-12 text-center text-muted-foreground">
                 Tidak ada PDU untuk Lantai {floor}.
@@ -113,21 +130,26 @@ export default function PowerLoadTab({
             const raw = cellValue(row.id, month);
             const value = raw === '' ? 0 : Number(raw);
 
-            if (! Number.isNaN(value)) {
+            if (!Number.isNaN(value)) {
                 monthlyTotals[month - 1] += value;
             }
         }
     });
 
     return (
-        <div className="flex flex-col gap-4 min-w-[700px]">
+        <div className="flex min-w-[700px] flex-col gap-4">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                <span>Periode:</span>
+                <span className="font-medium">{periodLabel}</span>
+            </div>
+
             <div className="flex flex-wrap items-center gap-2 overflow-x-auto">
                 {pdus.map((item) => (
                     <button
                         key={item.id}
                         type="button"
                         onClick={() => setSelectedPduId(String(item.id))}
-                        className={`whitespace-nowrap rounded-lg border px-3 py-2 text-sm transition-colors ${
+                        className={`rounded-lg border px-3 py-2 text-sm whitespace-nowrap transition-colors ${
                             String(item.id) === selectedPduId
                                 ? 'border-primary bg-primary/10 font-medium text-foreground'
                                 : 'border-sidebar-border/70 text-muted-foreground hover:bg-accent'
@@ -221,45 +243,41 @@ export default function PowerLoadTab({
                                                         event.target.value,
                                                     )
                                                 }
-                                                className="h-8 w-14 text-center px-0"
+                                                className="h-8 w-14 px-0 text-center"
                                                 inputMode="decimal"
                                             />
                                         </td>
                                     );
                                 })}
                                 <td className="border-l border-sidebar-border/50 px-2 py-2 text-center font-medium">
-                                    {monthlyTotals.reduce(
-                                        (total, current) => total + current,
-                                        0,
-                                    ).toFixed(2)}
+                                    {rowTotal(row.id).toFixed(2)}
                                 </td>
                             </tr>
                         ))}
                     </tbody>
-                </table>
-            </div>
-
-            <div className="overflow-x-auto rounded-xl border border-sidebar-border/70">
-                <table className="w-full border-collapse text-left text-sm">
-                    <tbody>
-                        <tr className="border-t border-sidebar-border/50 bg-muted/50 font-medium">
-                            <td className="px-4 py-3 text-right">Total per bulan</td>
-                            {MONTH_LABELS.map((_, index) => (
+                    <tfoot>
+                        <tr className="border-t border-sidebar-border/70 bg-muted/50 font-medium">
+                            <td colSpan={5} className="px-4 py-3 text-right">
+                                Total per bulan
+                            </td>
+                            {monthlyTotals.map((total, index) => (
                                 <td
                                     key={index}
                                     className="px-1 py-3 text-center"
                                 >
-                                    {monthlyTotals[index].toFixed(2)}
+                                    {total.toFixed(2)}
                                 </td>
                             ))}
                             <td className="border-l border-sidebar-border/50 px-2 py-3 text-center">
-                                {monthlyTotals.reduce(
-                                    (total, current) => total + current,
-                                    0,
-                                ).toFixed(2)}
+                                {monthlyTotals
+                                    .reduce(
+                                        (total, current) => total + current,
+                                        0,
+                                    )
+                                    .toFixed(2)}
                             </td>
                         </tr>
-                    </tbody>
+                    </tfoot>
                 </table>
             </div>
 

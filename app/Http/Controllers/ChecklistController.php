@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ChecklistEntryRequest;
+use App\Models\Asset;
 use App\Models\ChecklistCategory;
 use App\Models\ChecklistDayNote;
 use App\Models\ChecklistEntry;
+use App\Models\ChecklistSlotNote;
 use App\Models\Menu;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
@@ -33,20 +35,27 @@ class ChecklistController extends Controller
      */
     public function overview(Request $request): InertiaResponse
     {
+        $month = $this->resolveMonth($request);
+        $monthName = Carbon::createFromFormat('!Y-m', $month)
+            ->locale('id')
+            ->translatedFormat('F Y');
+        $start = Carbon::createFromFormat('!Y-m-d', $month.'-01')->startOfMonth();
         $today = today();
-        $monthStart = $today->copy()->startOfMonth();
-        $monthEnd = $today->copy()->endOfMonth();
+        $isCurrentMonth = $month === $today->format('Y-m');
+        $viewDate = $isCurrentMonth ? $today->toDateString() : $month.'-01';
+        $monthStart = $start->copy()->startOfMonth();
+        $monthEnd = $start->copy()->endOfMonth();
 
         $categories = $this->categoriesWithItems();
         $categoryIds = $categories->pluck('id');
 
-        $todayStats = $this->entryStats($today->toDateString(), $today->toDateString())
+        $todayStats = $this->entryStats($viewDate, $viewDate)
             ->keyBy('category_id');
         $monthStats = $this->entryStats($monthStart->toDateString(), $monthEnd->toDateString())
             ->keyBy('category_id');
 
         $notesToday = ChecklistDayNote::query()
-            ->whereDate('entry_date', $today)
+            ->whereDate('entry_date', $viewDate)
             ->whereIn('checklist_category_id', $categoryIds)
             ->get()
             ->keyBy('checklist_category_id');
@@ -57,9 +66,10 @@ class ChecklistController extends Controller
 
         return Inertia::render('dynamic/checklist/overview', [
             ...$this->childMenuProps($childMenu?->parent, $childMenu),
-            'date' => $today->toDateString(),
-            'month' => $today->format('Y-m'),
-            'daysInMonth' => $today->daysInMonth,
+            'date' => $viewDate,
+            'month' => $month,
+            'monthName' => $monthName,
+            'daysInMonth' => $monthEnd->day,
             'categories' => $categories->map(fn (ChecklistCategory $category): array => [
                 'id' => $category->id,
                 'slug' => $category->slug,
@@ -145,6 +155,18 @@ class ChecklistController extends Controller
             ])
             ->values();
 
+        $slotNotes = ChecklistSlotNote::query()
+            ->whereDate('entry_date', $date)
+            ->whereIn('checklist_category_id', $categoryIds)
+            ->get()
+            ->map(fn (ChecklistSlotNote $note): array => [
+                'category_id' => $note->checklist_category_id,
+                'time_slot' => $note->time_slot,
+                'risk_level' => $note->risk_level,
+                'note' => $note->note,
+            ])
+            ->values();
+
         $selectedCategoryId = $request->integer('category');
 
         if (! $categoryIds->contains($selectedCategoryId)) {
@@ -161,6 +183,7 @@ class ChecklistController extends Controller
             'categories' => $this->categoryPayload($categories),
             'entries' => $entries,
             'dayNotes' => $dayNotes,
+            'slotNotes' => $slotNotes,
             'canManage' => $request->user()->hasPermissionTo('manage checklist'),
         ]);
     }
@@ -262,6 +285,23 @@ class ChecklistController extends Controller
                 );
             }
 
+            foreach ($data['slot_notes'] ?? [] as $slotNote) {
+                $slotNoteText = trim((string) ($slotNote['note'] ?? ''));
+
+                ChecklistSlotNote::updateOrCreate(
+                    [
+                        'checklist_category_id' => $data['category_id'],
+                        'entry_date' => $data['entry_date'],
+                        'time_slot' => $slotNote['time_slot'],
+                    ],
+                    [
+                        'risk_level' => $slotNote['risk_level'],
+                        'note' => $slotNoteText !== '' ? $slotNoteText : null,
+                        'user_id' => $userId,
+                    ],
+                );
+            }
+
             foreach ($data['entries'] as $entry) {
                 $value = $entry['value'] ?? null;
                 $status = $entry['status'] ?? null;
@@ -291,6 +331,14 @@ class ChecklistController extends Controller
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Checklist saved.')]);
 
+        // Saving from an asset scan page returns the user to that page so
+        // they can keep scanning, instead of jumping to Daily Check.
+        $redirect = trim((string) $request->input('redirect', ''));
+
+        if ($redirect === '/assets/scan' || str_starts_with($redirect, '/assets/scan/')) {
+            return redirect($redirect);
+        }
+
         return redirect()->route('checklist.dailycheck', [
             'date' => $data['entry_date'],
             'category' => $data['category_id'],
@@ -310,9 +358,10 @@ class ChecklistController extends Controller
     }
 
     /**
-     * Export the selected category and month as a CSV recap. Numeric items
-     * show the daily average of their slots; status items show the count of
-     * each status recorded that day.
+     * Export one month of checklist entries across every active category as
+     * a single CSV. Each row represents one recorded time slot; the slot's
+     * risk level is used when available, falling back to the day note on the
+     * first row of that day.
      */
     public function export(Request $request): StreamedResponse
     {
@@ -320,91 +369,134 @@ class ChecklistController extends Controller
         $start = Carbon::createFromFormat('!Y-m-d', $month.'-01')->startOfMonth();
         $end = $start->copy()->endOfMonth();
 
-        $category = ChecklistCategory::query()
+        $categories = ChecklistCategory::query()
+            ->where('is_active', true)
             ->with(['items' => fn ($query) => $query->where('is_active', true)])
-            ->findOrFail($request->integer('category'));
+            ->orderBy('sort_order')
+            ->get();
 
         $entries = ChecklistEntry::query()
             ->whereBetween('entry_date', [$start->toDateString(), $end->toDateString()])
-            ->whereHas('item', fn ($query) => $query
-                ->where('is_active', true)
-                ->where('checklist_category_id', $category->id))
+            ->whereHas('item', fn ($query) => $query->where('is_active', true))
             ->get()
-            ->groupBy('checklist_item_id');
+            ->groupBy(fn (ChecklistEntry $entry): string => $entry->checklist_item_id.'|'.$entry->entry_date->toDateString());
 
-        $headers = ['No', 'Section', 'Group', 'Item', 'Unit'];
+        $dayNotes = ChecklistDayNote::query()
+            ->whereBetween('entry_date', [$start->toDateString(), $end->toDateString()])
+            ->get()
+            ->keyBy(fn (ChecklistDayNote $note): string => $note->checklist_category_id.'|'.$note->entry_date->toDateString());
 
-        for ($day = 1; $day <= $end->day; $day++) {
-            $headers[] = (string) $day;
-        }
+        $slotNotes = ChecklistSlotNote::query()
+            ->whereBetween('entry_date', [$start->toDateString(), $end->toDateString()])
+            ->get()
+            ->keyBy(fn (ChecklistSlotNote $note): string => $note->checklist_category_id.'|'.$note->entry_date->toDateString().'|'.$note->time_slot);
 
-        return Response::streamDownload(function () use ($category, $entries, $headers, $month, $end): void {
+        $headers = [
+            'Kategori',
+            'Section',
+            'Group',
+            'Item',
+            'Unit',
+            'Tanggal',
+            'Jam',
+            'Nilai',
+            'Status',
+            'Risk Level',
+            'Keterangan',
+        ];
+
+        return Response::streamDownload(function () use ($categories, $entries, $dayNotes, $slotNotes, $headers, $start, $end): void {
             $handle = fopen('php://output', 'w');
             fwrite($handle, "\xEF\xBB\xBF");
             fputcsv($handle, $headers, escape: '\\');
 
-            $row = 0;
+            foreach ($categories as $category) {
+                for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
+                    $note = $dayNotes->get($category->id.'|'.$date->toDateString());
+                    $isFirstRow = true;
 
-            foreach ($category->items as $item) {
-                $itemEntries = $entries->get($item->id, collect())
-                    ->groupBy(fn (ChecklistEntry $entry): string => $entry->entry_date->toDateString());
+                    foreach ($category->items as $item) {
+                        $dayEntries = $entries->get($item->id.'|'.$date->toDateString(), collect());
 
-                $line = [
-                    ++$row,
-                    $item->section ?? '-',
-                    $item->group ?? '-',
-                    $item->label,
-                    $item->unit ?? '-',
-                ];
+                        foreach ($category->time_slots as $slot) {
+                            $entry = $dayEntries->firstWhere('time_slot', $slot);
 
-                for ($day = 1; $day <= $end->day; $day++) {
-                    $date = sprintf('%s-%02d', $month, $day);
-                    $dayEntries = $itemEntries->get($date, collect());
+                            if ($entry === null || ($entry->value === null && $entry->status === null)) {
+                                continue;
+                            }
 
-                    if ($dayEntries->isEmpty()) {
-                        $line[] = '';
+                            $slotNote = $slotNotes->get(
+                                $category->id.'|'.$date->toDateString().'|'.$slot,
+                            );
 
-                        continue;
+                            fputcsv($handle, [
+                                $category->name,
+                                $item->section ?? '-',
+                                $item->group ?? '-',
+                                $item->label,
+                                $item->unit ?? '-',
+                                $date->format('d/m/Y'),
+                                $slot,
+                                $entry->value ?? '',
+                                $entry->status ?? '',
+                                $slotNote?->risk_level ?? ($isFirstRow ? ($note?->risk_level ?? '') : ''),
+                                $slotNote?->note ?? ($isFirstRow ? ($note?->note ?? '') : ''),
+                            ], escape: '\\');
+
+                            $isFirstRow = false;
+                        }
                     }
-
-                    if ($item->input_type === 'status') {
-                        $counts = $dayEntries->countBy('status');
-
-                        $line[] = collect(ChecklistEntry::STATUSES)
-                            ->filter(fn (string $status): bool => ($counts[$status] ?? 0) > 0)
-                            ->map(fn (string $status): string => $status.' '.$counts[$status])
-                            ->join(' / ');
-
-                        continue;
-                    }
-
-                    $values = $dayEntries->pluck('value')->filter(fn ($value): bool => $value !== null);
-
-                    $line[] = $values->isEmpty() ? '' : number_format((float) $values->avg(), 2, '.', '');
                 }
-
-                fputcsv($handle, $line, escape: '\\');
             }
 
             fclose($handle);
-        }, 'checklist-'.$category->slug.'-'.$month.'.csv', [
+        }, 'checklist-infrastruktur-'.$month.'.csv', [
             'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
     }
 
     /**
+     * Checklist categories that have at least one asset assigned from Asset
+     * Settings.
+     *
+     * @return list<int>
+     */
+    private function assignedChecklistCategoryIds(): array
+    {
+        return Asset::query()
+            ->where('in_checklist', true)
+            ->whereNotNull('checklist_category_id')
+            ->distinct()
+            ->pluck('checklist_category_id')
+            ->map(fn ($id): int => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    /**
      * Load the active categories with their active items and item count.
+     * Category-scoped checklists (FAP) still show their tab, but report zero
+     * items until an asset is assigned to them.
      *
      * @return Collection<int, ChecklistCategory>
      */
     private function categoriesWithItems(): Collection
     {
+        $assignedIds = $this->assignedChecklistCategoryIds();
+
         return ChecklistCategory::query()
             ->where('is_active', true)
             ->with(['items' => fn ($query) => $query->where('is_active', true)])
             ->withCount(['items' => fn ($query) => $query->where('is_active', true)])
             ->orderBy('sort_order')
-            ->get();
+            ->get()
+            ->each(function (ChecklistCategory $category) use ($assignedIds): void {
+                if ($category->requiresAssignedAsset()
+                    && ! in_array($category->id, $assignedIds, true)) {
+                    $category->setRelation('items', new Collection);
+                    $category->items_count = 0;
+                }
+            });
     }
 
     /**

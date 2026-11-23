@@ -53,8 +53,11 @@ class ChecklistSeeder extends Seeder
             }
 
             // Items removed from the config are deactivated instead of
-            // deleted so their historical entries survive.
+            // deleted so their historical entries survive. Asset-generated
+            // items are left alone: their lifecycle belongs to the asset
+            // sync, not to this infrastructure seeder.
             $category->items()
+                ->where('scope', 'infrastructure')
                 ->whereNotIn('id', $keptItemIds)
                 ->update(['is_active' => false]);
         }

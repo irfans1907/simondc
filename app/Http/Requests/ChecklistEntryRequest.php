@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Models\ChecklistCategory;
 use App\Models\ChecklistDayNote;
 use App\Models\ChecklistEntry;
+use App\Models\ChecklistSlotNote;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -41,6 +42,10 @@ class ChecklistEntryRequest extends FormRequest
             'entries.*.value' => ['nullable', 'numeric'],
             'entries.*.status' => ['nullable', 'string', Rule::in(ChecklistEntry::STATUSES)],
             'entries.*.note' => ['nullable', 'string', 'max:500'],
+            'slot_notes' => ['sometimes', 'array'],
+            'slot_notes.*.time_slot' => ['required', 'string', 'max:5'],
+            'slot_notes.*.risk_level' => ['required', 'string', Rule::in(ChecklistSlotNote::RISK_LEVELS)],
+            'slot_notes.*.note' => ['nullable', 'string', 'max:2000'],
         ];
     }
 
@@ -66,6 +71,15 @@ class ChecklistEntryRequest extends FormRequest
                 }
 
                 $items = $category->items->keyBy('id');
+
+                foreach ($this->input('slot_notes', []) as $index => $slotNote) {
+                    if (! in_array($slotNote['time_slot'] ?? null, $category->time_slots, true)) {
+                        $validator->errors()->add(
+                            "slot_notes.{$index}.time_slot",
+                            __('This time slot is not available for the selected category.'),
+                        );
+                    }
+                }
 
                 foreach ($this->input('entries', []) as $index => $entry) {
                     $item = $items->get($entry['item_id'] ?? null);

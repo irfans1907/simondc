@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
         $this->call(RackTypeSeeder::class);
         $this->call(SpatiePermissionSeeder::class);
         $this->call(ChecklistSeeder::class);
+        $this->call(ChecklistTemplateSeeder::class);
         $this->call(PowerConsumptionSeeder::class);
 
         User::factory()->create([

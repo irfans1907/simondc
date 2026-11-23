@@ -1,8 +1,6 @@
 import { router } from '@inertiajs/react';
-import { Save } from 'lucide-react';
-import { useState } from 'react';
+import { forwardRef, useImperativeHandle, useState } from 'react';
 import { storePanel } from '@/actions/App/Http/Controllers/MonthlyCheckController';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { monthlycheck } from '@/routes/checklist';
 import type { PowerPanel, PowerPanelReading } from './types';
@@ -18,11 +16,25 @@ type Props = {
     panels: PowerPanel[];
     panelReadings: Record<number, PowerPanelReading>;
     period: string;
+    periodLabel: string;
     canManage: boolean;
     onChange: () => void;
+    onSaved: () => void;
 };
 
-const PANEL_GROUPS = ['MDP', 'SDP', 'IO', 'PAC', 'UPS', 'PDU', 'UTILITY'] as const;
+export type PueTabHandle = {
+    save: () => Promise<void>;
+};
+
+const PANEL_GROUPS = [
+    'MDP',
+    'SDP',
+    'IO',
+    'PAC',
+    'UPS',
+    'PDU',
+    'UTILITY',
+] as const;
 
 const GROUP_LABELS: Record<string, string> = {
     MDP: 'MDP (Main Distribution Panel)',
@@ -47,7 +59,7 @@ function formatNumber(value: number | null): string {
 function panelFloor(panel: PowerPanel): number | null {
     const match = panel.name.match(/\b(L[234])\b/);
 
-    if (! match) {
+    if (!match) {
         return null;
     }
 
@@ -74,15 +86,15 @@ function computePanel(
     const r =
         edit !== null && edit.amp_r !== ''
             ? Number(edit.amp_r) || null
-            : reading?.amp_r ?? null;
+            : (reading?.amp_r ?? null);
     const s =
         edit !== null && edit.amp_s !== ''
             ? Number(edit.amp_s) || null
-            : reading?.amp_s ?? null;
+            : (reading?.amp_s ?? null);
     const t =
         edit !== null && edit.amp_t !== ''
             ? Number(edit.amp_t) || null
-            : reading?.amp_t ?? null;
+            : (reading?.amp_t ?? null);
 
     let kw = null;
     let kva = null;
@@ -142,7 +154,7 @@ function computeFloorLoad(
         const floor = panelFloor(panel);
         const kva = computed[panel.id].kva ?? 0;
 
-        if (! floor) {
+        if (!floor) {
             return;
         }
 
@@ -180,13 +192,18 @@ function computePueByFloor(
     return map;
 }
 
-export default function PueTab({
-    panels,
-    panelReadings,
-    period,
-    canManage,
-    onChange,
-}: Props) {
+const PueTab = forwardRef<PueTabHandle, Props>(function PueTab(
+    {
+        panels,
+        panelReadings,
+        period,
+        periodLabel,
+        canManage,
+        onChange,
+        onSaved,
+    },
+    ref,
+) {
     const [edits, setEdits] = useState<Record<number, PanelEdit>>({});
     const [dirty, setDirty] = useState<Set<number>>(new Set());
 
@@ -223,13 +240,13 @@ export default function PueTab({
     };
 
     const handleSave = async () => {
-        if (! canManage) {
+        if (!canManage) {
             return;
         }
 
         await Promise.all(
             panels.map((panel) => {
-                if (! dirty.has(panel.id)) {
+                if (!dirty.has(panel.id)) {
                     return Promise.resolve();
                 }
 
@@ -268,6 +285,7 @@ export default function PueTab({
         );
 
         setDirty(new Set());
+        onSaved();
 
         const [nextYear, nextMonth] = period.split('-').map(Number);
 
@@ -280,11 +298,65 @@ export default function PueTab({
         );
     };
 
+    useImperativeHandle(ref, () => ({ save: handleSave }));
+
     return (
-        <div className="flex flex-col gap-4 min-w-[900px]">
+        <div className="flex min-w-[900px] flex-col gap-4">
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                 <span>Periode:</span>
-                <span className="font-mono font-medium">{period}</span>
+                <span className="font-medium">{periodLabel}</span>
+            </div>
+
+            <div className="rounded-xl border border-sidebar-border/70 bg-muted/50 p-4">
+                <h3 className="mb-3 text-sm font-semibold">Ringkasan PUE</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
+                    <div>
+                        <div className="text-xs text-muted-foreground">
+                            PUE Lantai 2
+                        </div>
+                        <div className="font-mono font-medium">
+                            {pueByFloor[2] !== null
+                                ? pueByFloor[2].toFixed(3)
+                                : '-'}
+                        </div>
+                    </div>
+                    <div>
+                        <div className="text-xs text-muted-foreground">
+                            PUE Lantai 3
+                        </div>
+                        <div className="font-mono font-medium">
+                            {pueByFloor[3] !== null
+                                ? pueByFloor[3].toFixed(3)
+                                : '-'}
+                        </div>
+                    </div>
+                    <div>
+                        <div className="text-xs text-muted-foreground">
+                            PUE Lantai 4
+                        </div>
+                        <div className="font-mono font-medium">
+                            {pueByFloor[4] !== null
+                                ? pueByFloor[4].toFixed(3)
+                                : '-'}
+                        </div>
+                    </div>
+                    <div>
+                        <div className="text-xs text-muted-foreground">
+                            PUE DC
+                        </div>
+                        <div className="font-mono font-medium">
+                            {pueDc !== null ? pueDc.toFixed(3) : '-'}
+                        </div>
+                    </div>
+                    <div>
+                        <div className="text-xs text-muted-foreground">
+                            PUE Neucentrix
+                        </div>
+                        <div className="font-mono font-medium">
+                            {pueNeu !== null ? pueNeu.toFixed(3) : '-'}
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {PANEL_GROUPS.map((group) => {
@@ -298,35 +370,55 @@ export default function PueTab({
 
                 return (
                     <section key={group} className="flex flex-col gap-2">
-                        <div className="flex items-center gap-2 px-2 py-1.5 border-b border-sidebar-border/50 bg-background/50">
-                            <span className="font-semibold uppercase text-xs tracking-wider">
+                        <div className="flex items-center gap-2 border-b border-sidebar-border/50 bg-background/50 px-2 py-1.5">
+                            <span className="text-xs font-semibold tracking-wider uppercase">
                                 {GROUP_LABELS[group]}
                             </span>
-                            {canManage && dirty.size > 0 && (
-                                <Button size="sm" onClick={handleSave}>
-                                    <Save className="size-4" />
-                                    Simpan
-                                </Button>
-                            )}
                         </div>
 
                         <div className="overflow-x-auto rounded-xl border border-sidebar-border/70">
                             <table className="w-full border-collapse text-left text-sm">
                                 <thead>
                                     <tr className="border-b border-sidebar-border/70 text-muted-foreground">
-                                        <th className="px-4 py-3 font-medium">No</th>
-                                        <th className="px-4 py-3 font-medium">Nama Perangkat</th>
-                                        <th className="px-2 py-3 text-center font-medium">Kapasitas</th>
-                                        <th className="px-2 py-3 text-center font-medium">Satuan</th>
-                                        <th className="px-2 py-3 text-center font-medium">R</th>
-                                        <th className="px-2 py-3 text-center font-medium">S</th>
-                                        <th className="px-2 py-3 text-center font-medium">T</th>
-                                        <th className="px-2 py-3 text-center font-medium">kW</th>
-                                        <th className="px-2 py-3 text-center font-medium">kVA</th>
-                                        <th className="px-2 py-3 text-center font-medium">Kapas 80%</th>
-                                        <th className="px-2 py-3 text-center font-medium">Idle</th>
-                                        <th className="px-2 py-3 text-center font-medium">Used %</th>
-                                        <th className="px-4 py-3 font-medium">Keterangan</th>
+                                        <th className="px-4 py-3 font-medium">
+                                            No
+                                        </th>
+                                        <th className="px-4 py-3 font-medium">
+                                            Nama Perangkat
+                                        </th>
+                                        <th className="px-2 py-3 text-center font-medium">
+                                            Kapasitas
+                                        </th>
+                                        <th className="px-2 py-3 text-center font-medium">
+                                            Satuan
+                                        </th>
+                                        <th className="px-2 py-3 text-center font-medium">
+                                            R
+                                        </th>
+                                        <th className="px-2 py-3 text-center font-medium">
+                                            S
+                                        </th>
+                                        <th className="px-2 py-3 text-center font-medium">
+                                            T
+                                        </th>
+                                        <th className="px-2 py-3 text-center font-medium">
+                                            kW
+                                        </th>
+                                        <th className="px-2 py-3 text-center font-medium">
+                                            kVA
+                                        </th>
+                                        <th className="px-2 py-3 text-center font-medium">
+                                            Kapas 80%
+                                        </th>
+                                        <th className="px-2 py-3 text-center font-medium">
+                                            Idle
+                                        </th>
+                                        <th className="px-2 py-3 text-center font-medium">
+                                            Used %
+                                        </th>
+                                        <th className="px-4 py-3 text-center font-medium">
+                                            Keterangan
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -358,17 +450,18 @@ export default function PueTab({
                                                 <td className="px-2 py-2 text-center text-muted-foreground">
                                                     {panel.unit ?? '-'}
                                                 </td>
-                                                <td className="px-2 py-2 text-center">
+                                                <td className="item-center px-2 py-2 text-center">
                                                     <Input
                                                         value={edit.amp_r}
                                                         onChange={(event) =>
                                                             handleCellChange(
                                                                 panel.id,
                                                                 'amp_r',
-                                                                event.target.value,
+                                                                event.target
+                                                                    .value,
                                                             )
                                                         }
-                                                        className="h-8 w-16 text-center px-0"
+                                                        className="mx-auto h-8 w-16 px-0 text-center"
                                                         inputMode="decimal"
                                                     />
                                                 </td>
@@ -379,10 +472,11 @@ export default function PueTab({
                                                             handleCellChange(
                                                                 panel.id,
                                                                 'amp_s',
-                                                                event.target.value,
+                                                                event.target
+                                                                    .value,
                                                             )
                                                         }
-                                                        className="h-8 w-16 text-center px-0"
+                                                        className="mx-auto h-8 w-16 px-0 text-center"
                                                         inputMode="decimal"
                                                     />
                                                 </td>
@@ -393,10 +487,11 @@ export default function PueTab({
                                                             handleCellChange(
                                                                 panel.id,
                                                                 'amp_t',
-                                                                event.target.value,
+                                                                event.target
+                                                                    .value,
                                                             )
                                                         }
-                                                        className="h-8 w-16 text-center px-0"
+                                                        className="mx-auto h-8 w-16 px-0 text-center"
                                                         inputMode="decimal"
                                                     />
                                                 </td>
@@ -417,7 +512,7 @@ export default function PueTab({
                                                         ? c.used.toFixed(2)
                                                         : '-'}
                                                 </td>
-                                                <td className="px-4 py-2 text-muted-foreground">
+                                                <td className="px-4 py-2 text-center text-muted-foreground">
                                                     {panel.note ?? '-'}
                                                 </td>
                                             </tr>
@@ -429,48 +524,8 @@ export default function PueTab({
                     </section>
                 );
             })}
-
-            <div className="rounded-xl border border-sidebar-border/70 p-4 bg-muted/50">
-                <h3 className="mb-3 text-sm font-semibold">Ringkasan PUE</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                        <div className="text-xs text-muted-foreground">PUE Lantai 2</div>
-                        <div className="font-mono font-medium">
-                            {pueByFloor[2] !== null
-                                ? pueByFloor[2].toFixed(3)
-                                : '-'}
-                        </div>
-                    </div>
-                    <div>
-                        <div className="text-xs text-muted-foreground">PUE Lantai 3</div>
-                        <div className="font-mono font-medium">
-                            {pueByFloor[3] !== null
-                                ? pueByFloor[3].toFixed(3)
-                                : '-'}
-                        </div>
-                    </div>
-                    <div>
-                        <div className="text-xs text-muted-foreground">PUE Lantai 4</div>
-                        <div className="font-mono font-medium">
-                            {pueByFloor[4] !== null
-                                ? pueByFloor[4].toFixed(3)
-                                : '-'}
-                        </div>
-                    </div>
-                    <div>
-                        <div className="text-xs text-muted-foreground">PUE DC</div>
-                        <div className="font-mono font-medium">
-                            {pueDc !== null ? pueDc.toFixed(3) : '-'}
-                        </div>
-                    </div>
-                    <div>
-                        <div className="text-xs text-muted-foreground">PUE Neucentrix</div>
-                        <div className="font-mono font-medium">
-                            {pueNeu !== null ? pueNeu.toFixed(3) : '-'}
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
     );
-}
+});
+
+export default PueTab;

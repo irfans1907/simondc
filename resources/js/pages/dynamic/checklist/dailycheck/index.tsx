@@ -1,11 +1,25 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { CalendarDays, ClipboardCheck, RotateCcw, Save } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import {
+    CalendarDays,
+    ChevronDown,
+    RotateCcw,
+    Save,
+    Upload,
+} from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
+import { exportMethod } from '@/actions/App/Http/Controllers/ChecklistController';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
 import {
     Select,
     SelectContent,
@@ -15,7 +29,7 @@ import {
 } from '@/components/ui/select';
 import { menuBreadcrumbs, showChildCrumbs } from '@/lib/menu-breadcrumbs';
 import type { MenuRow } from '@/lib/menu-breadcrumbs';
-import { dailycheck, monthlycheck } from '@/routes/checklist';
+import { dailycheck } from '@/routes/checklist';
 import { store as storeEntries } from '@/routes/checklist/entries';
 
 type InputType = 'number' | 'status';
@@ -56,6 +70,15 @@ type DayNote = {
     note: string | null;
 };
 
+type SlotNote = {
+    category_id: number;
+    time_slot: string;
+    risk_level: RiskLevel;
+    note: string | null;
+};
+
+type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH';
+
 type Cell = {
     value: string;
     status: string;
@@ -63,7 +86,42 @@ type Cell = {
 
 const STATUS_OPTIONS = ['OK', 'NG', 'IDLE'] as const;
 
+const RISK_LEVELS: RiskLevel[] = ['LOW', 'MEDIUM', 'HIGH'];
+
+/** Radix Select cannot use an empty string value for the "no status" item. */
+const EMPTY_STATUS = 'NONE';
+
 const cellKey = (itemId: number, slot: string) => `${itemId}:${slot}`;
+
+const slotNoteKey = (categoryId: number, slot: string) =>
+    `${categoryId}:${slot}`;
+
+function slotNotesFromPayload(
+    notes: SlotNote[],
+): Record<string, { risk_level: RiskLevel; note: string }> {
+    const mapped: Record<string, { risk_level: RiskLevel; note: string }> = {};
+
+    for (const note of notes) {
+        mapped[slotNoteKey(note.category_id, note.time_slot)] = {
+            risk_level: note.risk_level,
+            note: note.note ?? '',
+        };
+    }
+
+    return mapped;
+}
+
+function highestRisk(levels: RiskLevel[]): RiskLevel {
+    if (levels.includes('HIGH')) {
+        return 'HIGH';
+    }
+
+    if (levels.includes('MEDIUM')) {
+        return 'MEDIUM';
+    }
+
+    return 'LOW';
+}
 
 function cellsFromEntries(entries: ChecklistEntryRow[]): Record<string, Cell> {
     const cells: Record<string, Cell> = {};
@@ -184,6 +242,7 @@ export default function ChecklistDailycheck({
     categories,
     entries,
     dayNotes,
+    slotNotes,
     canManage,
 }: {
     date: string;
@@ -192,6 +251,7 @@ export default function ChecklistDailycheck({
     categories: ChecklistCategory[];
     entries: ChecklistEntryRow[];
     dayNotes: DayNote[];
+    slotNotes: SlotNote[];
     canManage: boolean;
 }) {
     const { errors } = usePage<{ errors: Record<string, string> }>().props;
@@ -201,7 +261,9 @@ export default function ChecklistDailycheck({
         cellsFromEntries(entries),
     );
     const [notes, setNotes] = useState(() => notesFromDayNotes(dayNotes));
+    const [risks, setRisks] = useState(() => slotNotesFromPayload(slotNotes));
     const [saving, setSaving] = useState(false);
+    const [dateOpen, setDateOpen] = useState(false);
 
     const activeCategory =
         categories.find((category) => category.id === activeId) ??
@@ -211,15 +273,15 @@ export default function ChecklistDailycheck({
         note: '',
     };
 
-    const updateRiskLevel = (riskLevel: string) => {
+    const updateSlotRisk = (slot: string, riskLevel: RiskLevel) => {
         if (!activeCategory) {
             return;
         }
 
-        setNotes((current) => ({
+        setRisks((current) => ({
             ...current,
-            [activeCategory.id]: {
-                ...(current[activeCategory.id] ?? {
+            [slotNoteKey(activeCategory.id, slot)]: {
+                ...(current[slotNoteKey(activeCategory.id, slot)] ?? {
                     risk_level: 'LOW',
                     note: '',
                 }),
@@ -302,6 +364,12 @@ export default function ChecklistDailycheck({
         );
     };
 
+    const handleExport = () => {
+        window.location.href = exportMethod.url({
+            query: { month: date.slice(0, 7) },
+        });
+    };
+
     const updateCell = (
         itemId: number,
         slot: string,
@@ -341,6 +409,26 @@ export default function ChecklistDailycheck({
             }),
         );
 
+        const payloadSlotNotes = activeCategory.time_slots.map((slot) => {
+            const note = risks[slotNoteKey(activeCategory.id, slot)] ?? {
+                risk_level: 'LOW' as RiskLevel,
+                note: '',
+            };
+
+            return {
+                time_slot: slot,
+                risk_level: note.risk_level,
+                note: note.note.trim() === '' ? null : note.note,
+            };
+        });
+
+        // Keep the category/day risk in sync with the worst slot so the
+        // overview and export still have a summary value.
+        const dayRisk =
+            payloadSlotNotes.length > 0
+                ? highestRisk(payloadSlotNotes.map((note) => note.risk_level))
+                : activeNote.risk_level;
+
         setSaving(true);
 
         router.post(
@@ -348,9 +436,10 @@ export default function ChecklistDailycheck({
             {
                 category_id: activeCategory.id,
                 entry_date: date,
-                risk_level: activeNote.risk_level,
+                risk_level: dayRisk,
                 note: activeNote.note.trim() === '' ? null : activeNote.note,
                 entries: payloadEntries,
+                slot_notes: payloadSlotNotes,
             },
             {
                 preserveScroll: true,
@@ -365,42 +454,74 @@ export default function ChecklistDailycheck({
         <>
             <Head title="Daily Check" />
             <h1 className="sr-only">Daily Check</h1>
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
+            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <Heading
                         title="Daily Check"
                         description="Catat pembacaan infrastruktur per jam untuk tanggal yang dipilih."
                     />
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
                         <div className="flex items-center gap-2">
                             <Label htmlFor="checklist-date" className="sr-only">
                                 Tanggal
                             </Label>
-                            <Input
-                                id="checklist-date"
-                                type="date"
-                                value={date}
-                                onChange={(event) =>
-                                    changeDate(event.target.value)
-                                }
-                                className="w-40"
-                            />
+                            <Popover open={dateOpen} onOpenChange={setDateOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        id="checklist-date"
+                                        variant="outline"
+                                        className="w-[190px] justify-start"
+                                    >
+                                        <CalendarDays className="size-4" />
+                                        {format(parseISO(date), 'dd/MM/yyyy')}
+                                        <ChevronDown className="ml-auto size-4 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                    className="w-auto overflow-hidden p-0"
+                                    align="start"
+                                >
+                                    <Calendar
+                                        mode="single"
+                                        selected={parseISO(date)}
+                                        defaultMonth={parseISO(date)}
+                                        onSelect={(selected) => {
+                                            if (selected) {
+                                                changeDate(
+                                                    format(
+                                                        selected,
+                                                        'yyyy-MM-dd',
+                                                    ),
+                                                );
+                                                setDateOpen(false);
+                                            }
+                                        }}
+                                    />
+                                    <div className="px-3 pb-3">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            className="w-full"
+                                            onClick={() => {
+                                                changeDate(today);
+                                                setDateOpen(false);
+                                            }}
+                                        >
+                                            <CalendarDays className="size-4" />
+                                            Hari Ini
+                                        </Button>
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
                         </div>
-                        <Button variant="outline" asChild>
-                            <Link
-                                href={dailycheck.url({
-                                    query: { date: today },
-                                })}
-                            >
-                                <CalendarDays className="size-4" />
-                                Hari Ini
-                            </Link>
-                        </Button>
-                        <Button variant="outline" asChild>
-                            <Link href={monthlycheck.url()}>
-                                <ClipboardCheck className="size-4" />
-                                Rekap Bulanan
-                            </Link>
+                        <Button
+                            type="button"
+                            variant="default"
+                            className="bg-green-600 text-white hover:bg-green-700"
+                            onClick={handleExport}
+                        >
+                            <Upload className="size-4" />
+                            Export
                         </Button>
                     </div>
                 </div>
@@ -441,17 +562,17 @@ export default function ChecklistDailycheck({
                             <table className="w-full text-left text-sm">
                                 <thead>
                                     <tr className="border-b border-sidebar-border/70 text-muted-foreground">
-                                        <th className="min-w-56 px-4 py-3 font-medium">
+                                        <th className="item-center min-w-56 px-4 py-3 text-center font-medium">
                                             Item
                                         </th>
-                                        <th className="w-20 px-3 py-3 text-center font-medium">
+                                        <th className="item-center w-20 px-3 py-3 text-center font-medium">
                                             Satuan
                                         </th>
                                         {activeCategory.time_slots.map(
                                             (slot) => (
                                                 <th
                                                     key={slot}
-                                                    className="min-w-24 px-3 py-3 text-center font-medium"
+                                                    className="item-center min-w-24 px-3 py-3 text-center font-medium"
                                                 >
                                                     {slot}
                                                 </th>
@@ -466,16 +587,16 @@ export default function ChecklistDailycheck({
                                         >
                                             {section.section && (
                                                 <tr className="border-b border-sidebar-border/70 bg-muted/50">
+                                                    <td className="px-4 py-2 text-left font-semibold tracking-wide text-muted-foreground uppercase">
+                                                        {section.section}
+                                                    </td>
                                                     <td
                                                         colSpan={
                                                             activeCategory
                                                                 .time_slots
                                                                 .length + 2
                                                         }
-                                                        className="px-4 py-2 font-semibold"
-                                                    >
-                                                        {section.section}
-                                                    </td>
+                                                    />
                                                 </tr>
                                             )}
                                             {section.groups.map((group) => (
@@ -484,17 +605,17 @@ export default function ChecklistDailycheck({
                                                 >
                                                     {group.group && (
                                                         <tr className="border-b border-sidebar-border/50 bg-muted/20">
+                                                            <td className="px-4 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground">
+                                                                {group.group}
+                                                            </td>
                                                             <td
                                                                 colSpan={
                                                                     activeCategory
                                                                         .time_slots
                                                                         .length +
-                                                                    2
+                                                                    1
                                                                 }
-                                                                className="px-4 py-2 text-xs font-medium tracking-wide text-muted-foreground uppercase"
-                                                            >
-                                                                {group.group}
-                                                            </td>
+                                                            />
                                                         </tr>
                                                     )}
                                                     {group.items.map((item) => (
@@ -502,10 +623,10 @@ export default function ChecklistDailycheck({
                                                             key={item.id}
                                                             className="border-b border-sidebar-border/50 last:border-b-0"
                                                         >
-                                                            <td className="px-4 py-2">
+                                                            <td className="item-center px-4 py-2 text-center">
                                                                 {item.label}
                                                             </td>
-                                                            <td className="px-3 py-2 text-center text-muted-foreground">
+                                                            <td className="item-center px-3 py-2 text-center text-muted-foreground">
                                                                 {item.unit ??
                                                                     '-'}
                                                             </td>
@@ -527,54 +648,69 @@ export default function ChecklistDailycheck({
                                                                             key={
                                                                                 slot
                                                                             }
-                                                                            className="px-2 py-2 text-center"
+                                                                            className="item-center px-2 py-2 text-center"
                                                                         >
                                                                             {item.input_type ===
                                                                             'status' ? (
-                                                                                <select
-                                                                                    aria-label={`${item.label} ${slot}`}
+                                                                                <Select
                                                                                     value={
-                                                                                        cell.status
+                                                                                        cell.status ===
+                                                                                        ''
+                                                                                            ? EMPTY_STATUS
+                                                                                            : cell.status
                                                                                     }
-                                                                                    onChange={(
-                                                                                        event,
+                                                                                    onValueChange={(
+                                                                                        value,
                                                                                     ) =>
                                                                                         updateCell(
                                                                                             item.id,
                                                                                             slot,
                                                                                             'status',
-                                                                                            event
-                                                                                                .target
-                                                                                                .value,
+                                                                                            value ===
+                                                                                                EMPTY_STATUS
+                                                                                                ? ''
+                                                                                                : value,
                                                                                         )
                                                                                     }
                                                                                     disabled={
                                                                                         !canManage
                                                                                     }
-                                                                                    className="h-8 w-24 rounded-md border border-input bg-transparent px-1 text-center text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
                                                                                 >
-                                                                                    <option value="">
-                                                                                        -
-                                                                                    </option>
-                                                                                    {STATUS_OPTIONS.map(
-                                                                                        (
-                                                                                            status,
-                                                                                        ) => (
-                                                                                            <option
-                                                                                                key={
-                                                                                                    status
-                                                                                                }
-                                                                                                value={
-                                                                                                    status
-                                                                                                }
-                                                                                            >
-                                                                                                {
-                                                                                                    status
-                                                                                                }
-                                                                                            </option>
-                                                                                        ),
-                                                                                    )}
-                                                                                </select>
+                                                                                    <SelectTrigger
+                                                                                        aria-label={`${item.label} ${slot}`}
+                                                                                        size="sm"
+                                                                                        className="mx-auto w-24"
+                                                                                    >
+                                                                                        <SelectValue />
+                                                                                    </SelectTrigger>
+                                                                                    <SelectContent>
+                                                                                        <SelectItem
+                                                                                            value={
+                                                                                                EMPTY_STATUS
+                                                                                            }
+                                                                                        >
+                                                                                            -
+                                                                                        </SelectItem>
+                                                                                        {STATUS_OPTIONS.map(
+                                                                                            (
+                                                                                                status,
+                                                                                            ) => (
+                                                                                                <SelectItem
+                                                                                                    key={
+                                                                                                        status
+                                                                                                    }
+                                                                                                    value={
+                                                                                                        status
+                                                                                                    }
+                                                                                                >
+                                                                                                    {
+                                                                                                        status
+                                                                                                    }
+                                                                                                </SelectItem>
+                                                                                            ),
+                                                                                        )}
+                                                                                    </SelectContent>
+                                                                                </Select>
                                                                             ) : (
                                                                                 <Input
                                                                                     type="number"
@@ -598,7 +734,7 @@ export default function ChecklistDailycheck({
                                                                                     disabled={
                                                                                         !canManage
                                                                                     }
-                                                                                    className="h-8 w-24 text-center"
+                                                                                    className="mx-auto h-8 w-24 text-center"
                                                                                 />
                                                                             )}
                                                                         </td>
@@ -611,11 +747,84 @@ export default function ChecklistDailycheck({
                                             ))}
                                         </Fragment>
                                     ))}
+
+                                    <tr className="border-t border-sidebar-border/70 bg-muted/30">
+                                        <td className="px-4 py-2 text-center text-sm font-medium">
+                                            Risk Level
+                                        </td>
+                                        <td className="px-3 py-2 text-center text-muted-foreground">
+                                            -
+                                        </td>
+                                        {activeCategory.time_slots.map(
+                                            (slot) => {
+                                                const note = risks[
+                                                    slotNoteKey(
+                                                        activeCategory.id,
+                                                        slot,
+                                                    )
+                                                ] ?? {
+                                                    risk_level:
+                                                        'LOW' as RiskLevel,
+                                                    note: '',
+                                                };
+
+                                                return (
+                                                    <td
+                                                        key={`risk-${slot}`}
+                                                        className="px-2 py-2 text-center"
+                                                    >
+                                                        <Select
+                                                            value={
+                                                                note.risk_level
+                                                            }
+                                                            onValueChange={(
+                                                                value,
+                                                            ) =>
+                                                                updateSlotRisk(
+                                                                    slot,
+                                                                    value as RiskLevel,
+                                                                )
+                                                            }
+                                                            disabled={
+                                                                !canManage
+                                                            }
+                                                        >
+                                                            <SelectTrigger
+                                                                aria-label={`Risk Level ${slot}`}
+                                                                size="sm"
+                                                                className="mx-auto w-24"
+                                                            >
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {RISK_LEVELS.map(
+                                                                    (level) => (
+                                                                        <SelectItem
+                                                                            key={
+                                                                                level
+                                                                            }
+                                                                            value={
+                                                                                level
+                                                                            }
+                                                                        >
+                                                                            {
+                                                                                level
+                                                                            }
+                                                                        </SelectItem>
+                                                                    ),
+                                                                )}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </td>
+                                                );
+                                            },
+                                        )}
+                                    </tr>
                                 </tbody>
                             </table>
                         </div>
 
-                        <div className="grid gap-4 rounded-xl border border-sidebar-border/70 p-4 lg:grid-cols-[minmax(0,1fr)_240px_auto] lg:items-end">
+                        <div className="grid gap-4 rounded-xl border border-sidebar-border/70 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
                             <div className="grid gap-2">
                                 <Label htmlFor="checklist-note">
                                     Catatan {activeCategory.name}
@@ -631,31 +840,6 @@ export default function ChecklistDailycheck({
                                     className="mt-1 flex h-24 w-full min-w-0 resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
                                 />
                                 <InputError message={errors?.note} />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="checklist-risk">
-                                    Risk Level
-                                </Label>
-                                <Select
-                                    value={activeNote.risk_level}
-                                    onValueChange={updateRiskLevel}
-                                    disabled={!canManage}
-                                >
-                                    <SelectTrigger id="checklist-risk">
-                                        <SelectValue placeholder="Pilih risk level" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="LOW">LOW</SelectItem>
-                                        <SelectItem value="MEDIUM">
-                                            MEDIUM
-                                        </SelectItem>
-                                        <SelectItem value="HIGH">
-                                            HIGH
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <InputError message={errors?.risk_level} />
                             </div>
 
                             <div className="flex flex-wrap items-center gap-2">

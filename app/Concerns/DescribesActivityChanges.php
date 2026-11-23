@@ -60,6 +60,14 @@ trait DescribesActivityChanges
             return $resolvers[$attribute]($value);
         }
 
+        if (is_array($value)) {
+            return json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: 'none';
+        }
+
+        if (is_object($value)) {
+            return $value::class;
+        }
+
         return (string) $value;
     }
 }

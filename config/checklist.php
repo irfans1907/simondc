@@ -31,10 +31,12 @@ $status = fn (string $label): array => [
     'input_type' => 'status',
 ];
 
-$reading = fn (string $label, string $unit = ''): array => [
+$reading = fn (string $label, string $unit = '', ?float $min = null, ?float $max = null): array => [
     'label' => $label,
     'unit' => $unit !== '' ? $unit : null,
     'input_type' => 'number',
+    'min_value' => $min,
+    'max_value' => $max,
 ];
 
 $item = fn (?string $section, ?string $group, array $definition): array => [
@@ -47,7 +49,7 @@ $item = fn (?string $section, ?string $group, array $definition): array => [
 | PAC & AC
 */
 $pacRooms = [
-    'P A C IT Hall Lantai 3' => [
+    'PAC IT Hall Lantai 3' => [
         ['PAC-3.1 (Wing Barat)', true],
         ['PAC-3.3 (Wing Barat)', true],
         ['PAC-3.4 (Wing Barat)', true],
@@ -56,7 +58,7 @@ $pacRooms = [
         ['PAC-3.6 (Wing Timur)', true],
         ['PAC-3.7 (Wing Timur)', true],
     ],
-    'P A C IT Hall Lantai 4' => [
+    'PAC IT Hall Lantai 4' => [
         ['PAC-4.1', true],
         ['PAC-4.2', true],
         ['PAC-4.3', true],
@@ -64,12 +66,12 @@ $pacRooms = [
         ['PAC-4.5', true],
         ['PAC-4.6', true],
     ],
-    'A C Ruang MMR Lantai 4' => [
+    'AC Ruang MMR Lantai 4' => [
         ['AC-MMR4.1', false],
         ['AC-MMR4.2', false],
         ['AC-MMR-4.3', false],
     ],
-    'P A C IT Hall Lantai 2' => [
+    'PAC IT Hall Lantai 2' => [
         ['PAC-2.1', true],
         ['PAC-2.2', true],
         ['PAC-2.3', true],
@@ -77,26 +79,26 @@ $pacRooms = [
         ['PAC-2.5', true],
         ['PAC-2.6', true],
     ],
-    'A C Ruang MMR Lantai 2' => [
+    'AC Ruang MMR Lantai 2' => [
         ['AC-MMR2.1', false],
         ['AC-MMR2.2', false],
     ],
-    'A C Ruang Utility (UPS) 2 Lantai 1' => [
+    'AC Ruang Utility (UPS) 2 Lantai 1' => [
         ['AC-UPS2-1', false],
         ['AC-UPS2-2', false],
     ],
-    'A C Ruang Utility (UPS) A&B Lantai 1' => [
+    'AC Ruang Utility (UPS) A&B Lantai 1' => [
         ['AC-UPSA-1', false],
         ['AC-UPSA-2', false],
         ['AC-UPSA-3', false],
         ['AC-UPSA-4', false],
         ['AC-UPSA-5', false],
     ],
-    'A C Ruang Utility (BATTERY) A&B Lantai 1' => [
+    'AC Ruang Utility (BATTERY) A&B Lantai 1' => [
         ['AC-BATT-1', false],
         ['AC-BATT-2', false],
     ],
-    'A C Ruang Interconnection (NER)' => [
+    'AC Ruang Interconnection (NER)' => [
         ['AC-NER.1', false],
     ],
 ];
@@ -105,7 +107,7 @@ $pacItems = [];
 
 foreach ($pacRooms as $section => $groups) {
     foreach ($groups as [$group, $hasHumidity]) {
-        $pacItems[] = $item($section, $group, $number('Temperatur', '°C'));
+        $pacItems[] = $item($section, $group, $number('Temperature', '°C'));
 
         if ($hasHumidity) {
             $pacItems[] = $item($section, $group, $number('Humidity', '%'));
@@ -136,14 +138,14 @@ $ruanganGroups = [
 $ruanganItems = [];
 
 foreach ($ruanganGroups as $group) {
-    $ruanganItems[] = $item(null, $group, $number('Temperatur', '°C'));
+    $ruanganItems[] = $item(null, $group, $number('Temperature', '°C'));
     $ruanganItems[] = $item(null, $group, $number('Humidity', '%'));
 }
 
 /*
 | LOAD DC
 */
-$loadGroups = ['MDP - A', 'MDP - B', 'MDP - C', 'MDP - D', 'MDP - E'];
+$loadGroups = ['MDP-A', 'MDP-B', 'MDP-C', 'MDP-D', 'MDP-E'];
 
 $loadItems = [];
 
@@ -157,11 +159,11 @@ foreach ($loadGroups as $group) {
 | UPS
 */
 $upsSections = [
-    'a. Voltage IN-UPS' => [['VS', 'V'], ['VT', 'V']],
-    'a. Voltage OUT-UPS' => [['VS', 'V'], ['VT', 'V']],
-    'b. Ampere IN-UPS' => [['IR', 'A'], ['IS', 'A'], ['IT', 'A']],
-    'c. Ampere OUT-UPS' => [['IR', 'A'], ['IS', 'A'], ['IT', 'A']],
-    'c Prosentage Power UPS' => [['R', '%'], ['S', '%'], ['T', '%']],
+    'Voltage IN-UPS' => [['VS', 'V'], ['VT', 'V']],
+    'Voltage OUT-UPS' => [['VS', 'V'], ['VT', 'V']],
+    'Ampere IN-UPS' => [['IR', 'A'], ['IS', 'A'], ['IT', 'A']],
+    'Ampere OUT-UPS' => [['IR', 'A'], ['IS', 'A'], ['IT', 'A']],
+    'Presentage Power UPS' => [['R', '%'], ['S', '%'], ['T', '%']],
     'Frequency UPS' => [['Frequency', 'Hz']],
     'Battery UPS' => [
         ['Capacity', '%'],
@@ -185,38 +187,37 @@ $upsItemsFor = function (string $device) use ($upsSections, $item, $number): arr
 
 /*
 | Fire protection (FAP)
+|
+| Each FAP checklist category is one panel/system, so its items are
+| category-scoped instead of generated per asset. The asset_items flag tells
+| the asset sync to leave these categories alone.
 */
 $fapItems = [
     'fap-nn100-lt1' => [
-        ['Fire Protection System NN100 Lt.1', $status('Status Control Panel')],
-        ['Fire Protection System NN100 Lt.1', $reading('Pilot', 'MPa')],
-        ['Fire Protection System NN100 Lt.1', $reading('Storage', 'MPa')],
-        ['Fire Protection System NN100 Lt.1', $reading('Temp', '°C')],
+        $item('Fire Protection System NN100 Lt.1', null, $status('Status Control Panel')),
+        $item('Fire Protection System NN100 Lt.1', 'Kondisi Tabung', $reading('Pilot', 'MPa', 25, 30)),
+        $item('Fire Protection System NN100 Lt.1', 'Kondisi Tabung', $reading('Storage', 'MPa', 25, 30)),
+        $item('Fire Protection System NN100 Lt.1', 'Kondisi Tabung', $reading('Temp', '°C')),
     ],
     'fap-ig55-lt2' => [
-        ['Fire Protection System Inert Gas Lt.2', $status('Status Control Panel')],
-        ['Fire Protection System Inert Gas Lt.2', $reading('Storage', 'bar')],
-        ['Fire Protection System Inert Gas Lt.2', $reading('Temp', '°C')],
+        $item('Fire Protection System Inert Gas Lt.2', null, $status('Status Control Panel')),
+        $item('Fire Protection System Inert Gas Lt.2', null, $reading('Storage', 'bar', 240, 370)),
+        $item('Fire Protection System Inert Gas Lt.2', null, $reading('Temp', '°C')),
     ],
     'fap-nn100-lt4' => [
-        ['Fire Protection System NN100 Lt.4', $status('Status Control Panel')],
-        ['Fire Protection System NN100 Lt.4', $reading('Pilot', 'MPa')],
-        ['Fire Protection System NN100 Lt.4', $reading('Storage', 'MPa')],
-        ['Fire Protection System NN100 Lt.4', $reading('Temp', '°C')],
+        $item('Fire Protection System NN100 Lt.4', null, $status('Status Control Panel')),
+        $item('Fire Protection System NN100 Lt.4', 'Kondisi Tabung', $reading('Pilot', 'MPa', 25, 30)),
+        $item('Fire Protection System NN100 Lt.4', 'Kondisi Tabung', $reading('Storage', 'MPa', 25, 30)),
+        $item('Fire Protection System NN100 Lt.4', 'Kondisi Tabung', $reading('Temp', '°C')),
     ],
     'fap-fm200' => [
-        ['Fire Protection System FM200 Lt.3', $status('Status Control Panel')],
-        ['Fire Protection System FM200 Lt.3', $status('Kondisi Tabung')],
-        ['Fire Protection System FM200 Lt.3', $reading('Temp', '°C')],
+        $item('Fire Protection System FM200 Lt.3', null, $status('Status Control Panel')),
+        $item('Fire Protection System FM200 Lt.3', null, $status('Kondisi Tabung')),
+        $item('Fire Protection System FM200 Lt.3', null, $reading('Temp', '°C')),
     ],
 ];
 
-$fapItemsFor = function (string $slug) use ($fapItems, $item): array {
-    return array_map(
-        fn (array $definition): array => $item(null, $definition[0], $definition[1]),
-        $fapItems[$slug],
-    );
-};
+$fapItemsFor = fn (string $slug): array => $fapItems[$slug];
 
 /*
 | CCTV
@@ -302,6 +303,7 @@ return [
             'name' => 'FAP NN100 Lt.1',
             'time_slots' => $twoSlots,
             'sort_order' => 8,
+            'asset_items' => false,
             'items' => $fapItemsFor('fap-nn100-lt1'),
         ],
         [
@@ -309,6 +311,7 @@ return [
             'name' => 'FAP IG55 Lt.2',
             'time_slots' => $twoSlots,
             'sort_order' => 9,
+            'asset_items' => false,
             'items' => $fapItemsFor('fap-ig55-lt2'),
         ],
         [
@@ -316,6 +319,7 @@ return [
             'name' => 'FAP NN100 Lt.4',
             'time_slots' => $twoSlots,
             'sort_order' => 10,
+            'asset_items' => false,
             'items' => $fapItemsFor('fap-nn100-lt4'),
         ],
         [
@@ -323,6 +327,7 @@ return [
             'name' => 'FAP FM200',
             'time_slots' => $twoSlots,
             'sort_order' => 11,
+            'asset_items' => false,
             'items' => $fapItemsFor('fap-fm200'),
         ],
         [

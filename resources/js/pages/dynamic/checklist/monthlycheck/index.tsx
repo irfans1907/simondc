@@ -1,11 +1,21 @@
 import { Head, router } from '@inertiajs/react';
-import { Download, RotateCcw, Save } from 'lucide-react';
-import { useState } from 'react';
-import { exportMethod, storePanel } from '@/actions/App/Http/Controllers/MonthlyCheckController';
+import {
+    CalendarDays,
+    ChevronDown,
+    ChevronLeft,
+    ChevronRight,
+    Download,
+    Save,
+} from 'lucide-react';
+import { useRef, useState } from 'react';
+import { exportMethod } from '@/actions/App/Http/Controllers/MonthlyCheckController';
 import Heading from '@/components/heading';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
 import {
     Select,
     SelectContent,
@@ -14,12 +24,12 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import type { MenuRow } from '@/lib/menu-breadcrumbs';
 import { menuBreadcrumbs, showChildCrumbs } from '@/lib/menu-breadcrumbs';
 import { monthlycheck } from '@/routes/checklist';
 import PowerLoadTab from './power-load-tab';
 import PueTab from './pue-tab';
+import type { PueTabHandle } from './pue-tab';
 import type { PowerPanel, PowerPanelReading, PowerPdu } from './types';
 
 type TabId = 'lantai2' | 'lantai4' | 'pue';
@@ -50,21 +60,26 @@ const MONTH_LABELS = [
     'Des',
 ];
 
+const MONTH_FULL_LABELS = [
+    'Januari',
+    'Februari',
+    'Maret',
+    'April',
+    'Mei',
+    'Juni',
+    'Juli',
+    'Agustus',
+    'September',
+    'Oktober',
+    'November',
+    'Desember',
+];
+
 const TAB_LABELS: Record<TabId, string> = {
     lantai2: 'Lantai 2',
     lantai4: 'Lantai 4',
-    pue: 'PUE & Beban DC',
+    pue: 'PUE',
 };
-
-const YEAR_MIN = 2024;
-const YEAR_MAX = 2030;
-
-function monthOptions(): { label: string; value: string }[] {
-    return Array.from({ length: 12 }, (_, index) => ({
-        label: MONTH_LABELS[index],
-        value: String(index + 1).padStart(2, '0'),
-    }));
-}
 
 export default function ChecklistMonthlycheck({
     tab: rawTab,
@@ -83,8 +98,22 @@ export default function ChecklistMonthlycheck({
         String(month).padStart(2, '0'),
     );
     const [dirty, setDirty] = useState(false);
+    const [open, setOpen] = useState(false);
+    const [viewYear, setViewYear] = useState(year);
+    const pueTabRef = useRef<PueTabHandle>(null);
 
-    const navigateTo = (nextTab: TabId, nextYear: number, nextMonth: string) => {
+    const selectedMonthValue = `${selectedYear}-${selectedMonth}`;
+    const currentMonthValue = (() => {
+        const now = new Date();
+
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    })();
+
+    const navigateTo = (
+        nextTab: TabId,
+        nextYear: number,
+        nextMonth: string,
+    ) => {
         router.get(
             monthlycheck.url({
                 query: {
@@ -104,67 +133,21 @@ export default function ChecklistMonthlycheck({
         navigateTo(nextTab, selectedYear, selectedMonth);
     };
 
-    const handleYearChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const value = Number(event.target.value);
-
-        if (Number.isNaN(value) || value < YEAR_MIN || value > YEAR_MAX) {
-            return;
+    const handleOpenChange = (nextOpen: boolean) => {
+        if (nextOpen) {
+            setViewYear(selectedYear);
         }
 
-        setSelectedYear(value);
-        navigateTo(selectedTab, value, selectedMonth);
+        setOpen(nextOpen);
     };
 
-    const handleMonthChange = (value: string) => {
-        setSelectedMonth(value);
-        navigateTo(selectedTab, selectedYear, value);
-    };
+    const handleMonthSelect = (value: string) => {
+        const [nextYear, nextMonth] = value.split('-');
+        const yearNumber = Number(nextYear);
 
-    const handleSave = async () => {
-        if (! canManage) {
-            return;
-        }
-
-        if (selectedTab === 'pue') {
-            await Promise.all(
-                panels.map((panel) => {
-                    const reading = panelReadings[panel.id];
-                    const r = reading?.amp_r ?? null;
-                    const s = reading?.amp_s ?? null;
-                    const t = reading?.amp_t ?? null;
-                    const note = reading?.note ?? null;
-
-                    if (r === null && s === null && t === null && !note) {
-                        return Promise.resolve();
-                    }
-
-                    return router.post(storePanel.url(), {
-                        panel_id: panel.id,
-                        period,
-                        amp_r: r,
-                        amp_s: s,
-                        amp_t: t,
-                        note,
-                    });
-                }),
-            );
-
-            setDirty(false);
-
-            const [nextYear, nextMonth] = period.split('-').map(Number);
-
-            router.get(
-                monthlycheck.url({
-                    query: {
-                        tab: 'pue',
-                        year: nextYear,
-                        month: nextMonth,
-                    },
-                }),
-                {},
-                { preserveScroll: true },
-            );
-        }
+        setSelectedYear(yearNumber);
+        setSelectedMonth(nextMonth);
+        navigateTo(selectedTab, yearNumber, nextMonth);
     };
 
     const handleExport = () => {
@@ -186,7 +169,7 @@ export default function ChecklistMonthlycheck({
         <>
             <Head title="Monthly Check" />
             <h1 className="sr-only">Monthly Check</h1>
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
+            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <Heading
                         title="Monthly Check"
@@ -196,117 +179,173 @@ export default function ChecklistMonthlycheck({
                                 : 'Beban daya per PDU (ampere) per bulan.'
                         }
                     />
-                    <div className="flex flex-wrap items-center gap-2">
-                        <ToggleGroup
-                            type="single"
-                            size="sm"
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Select
                             value={selectedTab}
                             onValueChange={handleTabChange}
-                            className="hidden md:flex"
                         >
-                            {(['lantai2', 'lantai4', 'pue'] as TabId[]).map(
-                                (id) => (
-                                    <ToggleGroupItem
-                                        key={id}
-                                        value={id}
-                                        className="data-[state=on]:shadow-sm"
-                                    >
-                                        {TAB_LABELS[id]}
-                                    </ToggleGroupItem>
-                                ),
-                            )}
-                        </ToggleGroup>
-                        {selectedTab !== 'pue' && (
-                            <div className="flex items-center gap-2">
-                                <Label
-                                    htmlFor="monthly-year"
-                                    className="sr-only"
-                                >
-                                    Tahun
-                                </Label>
-                                <Input
-                                    id="monthly-year"
-                                    type="number"
-                                    min={YEAR_MIN}
-                                    max={YEAR_MAX}
-                                    value={selectedYear}
-                                    onChange={handleYearChange}
-                                    className="w-20"
-                                />
-                                <Button
-                                    variant="outline"
-                                    onClick={handleExport}
-                                    disabled={!canManage}
-                                >
-                                    <Download className="size-4" />
-                                    Export CSV
-                                </Button>
-                            </div>
-                        )}
-                        {selectedTab === 'pue' && (
-                            <div className="flex items-center gap-2">
-                                <Label
-                                    htmlFor="monthly-pue-month"
-                                    className="sr-only"
-                                >
-                                    Bulan
-                                </Label>
-                                <Select
-                                    onValueChange={handleMonthChange}
-                                    defaultValue={selectedMonth}
-                                >
-                                    <SelectTrigger id="monthly-pue-month">
-                                        <SelectValue placeholder="Bulan" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {monthOptions().map((option) => (
-                                            <SelectItem
-                                                key={option.value}
-                                                value={option.value}
-                                            >
-                                                {option.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <Button
-                                    variant="outline"
-                                    onClick={handleExport}
-                                    disabled={!canManage}
-                                >
-                                    <Download className="size-4" />
-                                    Export CSV
-                                </Button>
-                                {canManage && dirty && (
-                                    <Button onClick={handleSave}>
-                                        <Save className="size-4" />
-                                        Simpan
-                                    </Button>
+                            <SelectTrigger
+                                className="w-[110px]"
+                                aria-label="Tab laporan"
+                            >
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {(['lantai2', 'lantai4', 'pue'] as TabId[]).map(
+                                    (id) => (
+                                        <SelectItem key={id} value={id}>
+                                            {TAB_LABELS[id]}
+                                        </SelectItem>
+                                    ),
                                 )}
-                                <Button variant="outline" asChild>
-                                    <a href={monthlycheck.url()}>
-                                        <RotateCcw className="size-4" />
-                                        Muat Ulang
-                                    </a>
+                            </SelectContent>
+                        </Select>
+                        <Popover open={open} onOpenChange={handleOpenChange}>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    className="w-[190px] justify-start"
+                                >
+                                    <CalendarDays className="size-4" />
+                                    {
+                                        MONTH_FULL_LABELS[
+                                            Number(selectedMonth) - 1
+                                        ]
+                                    }{' '}
+                                    {selectedYear}
+                                    <ChevronDown className="ml-auto size-4 opacity-50" />
                                 </Button>
-                            </div>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-64 p-3" align="start">
+                                <div className="mb-2 flex items-center justify-between">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        onClick={() =>
+                                            setViewYear((value) => value - 1)
+                                        }
+                                    >
+                                        <ChevronLeft className="size-4" />
+                                    </Button>
+                                    <span className="text-sm font-medium">
+                                        {viewYear}
+                                    </span>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        onClick={() =>
+                                            setViewYear((value) => value + 1)
+                                        }
+                                    >
+                                        <ChevronRight className="size-4" />
+                                    </Button>
+                                </div>
+                                <div className="grid grid-cols-3 gap-1">
+                                    {MONTH_LABELS.map((label, index) => {
+                                        const value = `${viewYear}-${String(
+                                            index + 1,
+                                        ).padStart(2, '0')}`;
+                                        const isSelected =
+                                            value === selectedMonthValue;
+                                        const isCurrent =
+                                            value === currentMonthValue;
+
+                                        return (
+                                            <Button
+                                                key={value}
+                                                type="button"
+                                                variant={
+                                                    isSelected
+                                                        ? 'default'
+                                                        : 'ghost'
+                                                }
+                                                size="sm"
+                                                className="relative h-9"
+                                                onClick={() => {
+                                                    setOpen(false);
+
+                                                    if (!isSelected) {
+                                                        handleMonthSelect(
+                                                            value,
+                                                        );
+                                                    }
+                                                }}
+                                            >
+                                                {label}
+                                                {isCurrent ? (
+                                                    <span
+                                                        className={`${
+                                                            isSelected
+                                                                ? 'bg-primary-foreground'
+                                                                : 'bg-primary'
+                                                        }`}
+                                                    />
+                                                ) : null}
+                                            </Button>
+                                        );
+                                    })}
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="mt-2 w-full"
+                                    onClick={() => {
+                                        setOpen(false);
+
+                                        if (
+                                            selectedMonthValue !==
+                                            currentMonthValue
+                                        ) {
+                                            handleMonthSelect(
+                                                currentMonthValue,
+                                            );
+                                        }
+                                    }}
+                                >
+                                    <CalendarDays className="size-4" />
+                                    Bulan Ini
+                                </Button>
+                            </PopoverContent>
+                        </Popover>
+                        <Button
+                            variant="default"
+                            className="bg-green-600 text-white hover:bg-green-700"
+                            onClick={handleExport}
+                            disabled={!canManage}
+                        >
+                            <Download className="size-4" />
+                            Export
+                        </Button>
+                        {selectedTab === 'pue' && canManage && dirty && (
+                            <Button
+                                onClick={() => void pueTabRef.current?.save()}
+                            >
+                                <Save className="size-4" />
+                                Simpan
+                            </Button>
                         )}
                     </div>
                 </div>
                 <Separator />
                 {selectedTab === 'pue' ? (
                     <PueTab
+                        ref={pueTabRef}
                         panels={panels}
                         panelReadings={panelReadings}
                         period={period}
+                        periodLabel={`${MONTH_FULL_LABELS[Number(selectedMonth) - 1]} ${selectedYear}`}
                         canManage={canManage}
                         onChange={() => setDirty(true)}
+                        onSaved={() => setDirty(false)}
                     />
                 ) : (
                     <PowerLoadTab
                         floor={floor}
                         year={selectedYear}
                         pdus={pdus}
+                        periodLabel={`${MONTH_FULL_LABELS[Number(selectedMonth) - 1]} ${selectedYear}`}
                         canManage={canManage}
                     />
                 )}

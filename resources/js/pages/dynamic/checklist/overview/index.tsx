@@ -1,12 +1,18 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import {
     AlertTriangle,
     ArrowRight,
+    BookOpenCheck,
+    CalendarCheck2,
     CalendarDays,
+    ChevronDown,
+    ChevronLeft,
+    ChevronRight,
     ClipboardList,
     Gauge,
     ListChecks,
 } from 'lucide-react';
+import { useState } from 'react';
 import Heading from '@/components/heading';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,6 +23,11 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
 import { menuBreadcrumbs, showChildCrumbs } from '@/lib/menu-breadcrumbs';
 import type { MenuRow } from '@/lib/menu-breadcrumbs';
 import { dailycheck, monthlycheck } from '@/routes/checklist';
@@ -72,7 +83,8 @@ function ProgressBar({ filled, total }: { filled: number; total: number }) {
     const value = percent(filled, total);
 
     return (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-center gap-2">
+            <span aria-hidden className="w-4" />
             <div className="h-2 w-24 overflow-hidden rounded-full bg-muted">
                 <div
                     className={`h-full rounded-full ${
@@ -122,6 +134,7 @@ function StatCard({
 export default function ChecklistOverview({
     date,
     month,
+    monthName,
     daysInMonth,
     categories,
     totals,
@@ -129,11 +142,40 @@ export default function ChecklistOverview({
 }: {
     date: string;
     month: string;
+    monthName: string;
     daysInMonth: number;
     categories: OverviewCategory[];
     totals: Totals;
     recentNotes: RecentNote[];
 }) {
+    const monthNames = Array.from({ length: 12 }, (_, index) =>
+        new Date(2000, index, 1).toLocaleDateString('id-ID', {
+            month: 'long',
+        }),
+    );
+    const [open, setOpen] = useState(false);
+    const [viewYear, setViewYear] = useState(Number(month.split('-')[0]));
+    const now = new Date();
+    const currentMonthValue = `${now.getFullYear()}-${String(
+        now.getMonth() + 1,
+    ).padStart(2, '0')}`;
+
+    const handleOpenChange = (nextOpen: boolean) => {
+        if (nextOpen) {
+            setViewYear(Number(month.split('-')[0]));
+        }
+
+        setOpen(nextOpen);
+    };
+
+    const handleMonthChange = (value: string) => {
+        router.get(
+            '/checklist/overview',
+            { month: value },
+            { preserveScroll: true },
+        );
+    };
+
     const todayProgress = percent(totals.filled_today, totals.slots);
     const monthProgress = percent(
         totals.filled_month,
@@ -144,29 +186,130 @@ export default function ChecklistOverview({
         <>
             <Head title="Overview" />
             <h1 className="sr-only">Overview</h1>
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
+            <div className="flex h-full flex-1 flex-col overflow-x-auto rounded-xl p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <Heading
                         title="Checklist Overview"
-                        description={`Ringkasan checklist infrastruktur untuk ${date} dan bulan ${month}.`}
+                        description={`Ringkasan checklist infrastruktur untuk bulan ${monthName}.`}
                     />
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Popover open={open} onOpenChange={handleOpenChange}>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    className="w-[190px] justify-start"
+                                >
+                                    <CalendarDays className="size-4" />
+                                    {monthName}
+                                    <ChevronDown className="ml-auto size-4 opacity-50" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-64 p-3" align="end">
+                                <div className="mb-2 flex items-center justify-between">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        onClick={() =>
+                                            setViewYear((year) => year - 1)
+                                        }
+                                    >
+                                        <ChevronLeft className="size-4" />
+                                    </Button>
+                                    <span className="text-sm font-medium">
+                                        {viewYear}
+                                    </span>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        onClick={() =>
+                                            setViewYear((year) => year + 1)
+                                        }
+                                    >
+                                        <ChevronRight className="size-4" />
+                                    </Button>
+                                </div>
+                                <div className="grid grid-cols-3 gap-1">
+                                    {monthNames.map((name, index) => {
+                                        const value = `${viewYear}-${String(
+                                            index + 1,
+                                        ).padStart(2, '0')}`;
+                                        const isSelected = value === month;
+                                        const isCurrent =
+                                            value === currentMonthValue;
+
+                                        return (
+                                            <Button
+                                                key={value}
+                                                type="button"
+                                                variant={
+                                                    isSelected
+                                                        ? 'default'
+                                                        : 'ghost'
+                                                }
+                                                size="sm"
+                                                className="relative h-9"
+                                                onClick={() => {
+                                                    setOpen(false);
+
+                                                    if (!isSelected) {
+                                                        handleMonthChange(
+                                                            value,
+                                                        );
+                                                    }
+                                                }}
+                                            >
+                                                {name.slice(0, 3)}
+                                                {isCurrent ? (
+                                                    <span
+                                                        className={`
+                                                            ${
+                                                            isSelected
+                                                                ? 'bg-primary-foreground'
+                                                                : 'bg-primary'
+                                                        }`}
+                                                    />
+                                                ) : null}
+                                            </Button>
+                                        );
+                                    })}
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="mt-2 w-full"
+                                    onClick={() => {
+                                        setOpen(false);
+
+                                        if (month !== currentMonthValue) {
+                                            handleMonthChange(
+                                                currentMonthValue,
+                                            );
+                                        }
+                                    }}
+                                >
+                                    <CalendarDays className="size-4" />
+                                    Bulan Ini
+                                </Button>
+                            </PopoverContent>
+                        </Popover>
                         <Button asChild>
                             <Link href={dailycheck.url({ query: { date } })}>
-                                <CalendarDays className="size-4" />
+                                <BookOpenCheck className="size-4" />
                                 Daily Check
                             </Link>
                         </Button>
-                        <Button variant="outline" asChild>
+                        <Button asChild>
                             <Link href={monthlycheck.url({ query: { month } })}>
-                                <ClipboardList className="size-4" />
+                                <CalendarCheck2 className="size-4" />
                                 Monthly Check
                             </Link>
                         </Button>
                     </div>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                     <StatCard
                         title="Total Item"
                         value={String(totals.items)}
@@ -193,11 +336,11 @@ export default function ChecklistOverview({
                     />
                 </div>
 
-                <div className="overflow-x-auto rounded-xl border border-sidebar-border/70">
+                <div className="mt-4 mb-4 overflow-x-auto rounded-xl border border-sidebar-border/70">
                     <table className="w-full text-left text-sm">
                         <thead>
                             <tr className="border-b border-sidebar-border/70 text-muted-foreground">
-                                <th className="min-w-48 px-4 py-3 font-medium">
+                                <th className="min-w-48 px-4 py-3 text-center font-medium">
                                     Kategori
                                 </th>
                                 <th className="px-4 py-3 text-center font-medium">
@@ -212,7 +355,7 @@ export default function ChecklistOverview({
                                 <th className="px-4 py-3 text-center font-medium">
                                     Risk
                                 </th>
-                                <th className="min-w-48 px-4 py-3 font-medium">
+                                <th className="min-w-48 px-4 py-3 text-center font-medium">
                                     Catatan
                                 </th>
                                 <th className="px-4 py-3 text-center font-medium">
@@ -237,7 +380,7 @@ export default function ChecklistOverview({
                                         key={category.id}
                                         className="border-b border-sidebar-border/50 last:border-b-0"
                                     >
-                                        <td className="px-4 py-3 font-medium">
+                                        <td className="px-4 py-3 text-center font-medium">
                                             {category.name}
                                         </td>
                                         <td className="px-4 py-3 text-center text-muted-foreground">
@@ -270,7 +413,7 @@ export default function ChecklistOverview({
                                                 {category.risk_level}
                                             </Badge>
                                         </td>
-                                        <td className="max-w-64 px-4 py-3 text-muted-foreground">
+                                        <td className="max-w-64 px-4 py-3 text-center text-muted-foreground">
                                             <span className="line-clamp-2">
                                                 {category.note || '-'}
                                             </span>
@@ -362,7 +505,7 @@ export default function ChecklistOverview({
                                 Hijau: seluruh slot pada periode sudah terisi.
                             </p>
                             <p>
-                                <span className="mr-2 inline-block size-2 rounded-full bg-primary align-middle" />
+                                <span className="mr-2 inline-block size-2 rounded-full bg-blue-500 align-middle" />
                                 Biru: sebagian slot sudah terisi.
                             </p>
                             <p>
